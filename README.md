@@ -8,7 +8,7 @@ Arnold is supported now. RenderMan is planned.
 | --- | --- |
 | [arnoldLight-gaffer](https://github.com/sebdvvv/arnoldLight-gaffer) | `ArnoldLight` — one node to add an Arnold light (area, spot, mesh, …) |
 | [arnoldPhysicalSky-gaffer](https://github.com/sebdvvv/arnoldPhysicalSky-gaffer) | `ArnoldPhysicalSky` — HDRI / physical sky / color env light |
-| [shadingBox-gaffer](https://github.com/sebdvvv/shadingBox-gaffer) | `ShadingBox` — assign Arnold shaders (up to 8 slots) |
+| [shadingTk-gaffer](https://github.com/sebdvvv/shadingTk-gaffer) | `ShadingTk` — assign Arnold shaders (up to 8 slots) |
 | [lightsConfig-gaffer](https://github.com/sebdvvv/lightsConfig-gaffer) | Light and AOV setup |
 | [arnoldConfig-gaffer](https://github.com/sebdvvv/arnoldConfig-gaffer) | Arnold renderer config |
 
