@@ -1,0 +1,19 @@
+name: Preview
+engine: arnold
+options:
+  ai:AA_samples:
+    enabled: true
+    value: 2
+  ai:GI_diffuse_samples:
+    enabled: true
+    value: 2
+  ai:GI_specular_samples:
+    enabled: true
+    value: 2
+  ai:GI_transmission_samples:
+    enabled: true
+    value: 2
+  ai:enable_adaptive_sampling:
+    enabled: true
+    value: false
+slots: []

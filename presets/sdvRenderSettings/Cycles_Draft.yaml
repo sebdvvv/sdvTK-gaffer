@@ -1,0 +1,28 @@
+name: Draft
+engine: cycles
+options:
+  cycles:session:samples:
+    enabled: true
+    value: 32
+  cycles:integrator:use_adaptive_sampling:
+    enabled: true
+    value: true
+  cycles:integrator:adaptive_threshold:
+    enabled: true
+    value: 0.05
+  cycles:integrator:adaptive_min_samples:
+    enabled: true
+    value: 8
+  cycles:integrator:max_bounce:
+    enabled: true
+    value: 8
+  cycles:integrator:max_diffuse_bounce:
+    enabled: true
+    value: 3
+  cycles:integrator:max_glossy_bounce:
+    enabled: true
+    value: 4
+  cycles:integrator:max_transmission_bounce:
+    enabled: true
+    value: 8
+slots: []

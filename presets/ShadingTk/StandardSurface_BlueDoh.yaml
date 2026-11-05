@@ -1,0 +1,70 @@
+name: DohBlue
+shader: standard_surface
+parameters:
+  base: 0.7400000095367432
+  base_color: [0.1695588380098343, 0.3325398564338684, 0.4037114977836609]
+  diffuse_roughness: 1.2999999523162842
+  specular: 0.7599999904632568
+  specular_color: [0.27090001106262207, 0.5952901840209961, 0.6449999809265137]
+  specular_roughness: 0.6899999976158142
+  specular_IOR: 1.340000033378601
+  specular_anisotropy: 0.0
+  specular_rotation: 0.0
+  metalness: 0.0
+  transmission: 0.20000000298023224
+  transmission_color: [0.006399999838322401, 0.08166401833295822, 0.1599999964237213]
+  transmission_depth: 32.0
+  transmission_scatter: [0.0, 0.0, -0.0]
+  transmission_scatter_anisotropy: 0.0
+  transmission_dispersion: 0.0
+  transmission_extra_roughness: 0.0
+  transmission_shadow_density: 0.05000000074505806
+  transmit_aovs: false
+  subsurface: 0.3799999952316284
+  subsurface_color: [0.08774999529123306, 0.13028335571289062, 0.22499999403953552]
+  subsurface_radius: [2.0, 2.0, 2.0]
+  subsurface_scale: 0.10000000149011612
+  subsurface_anisotropy: 0.0
+  subsurface_type: randomwalk_v2
+  sheen: 0.2800000011920929
+  sheen_color: [0.709194004535675, 1.3133223056793213, 0.7092440724372864]
+  sheen_roughness: 0.6000000238418579
+  thin_walled: false
+  normal: [0.0, 0.0, 0.0]
+  tangent: [0.0, 0.0, 0.0]
+  coat: 0.6499999761581421
+  coat_color: [0.4968000054359436, 0.6899999976158142, 0.666814923286438]
+  coat_roughness: 0.5600000023841858
+  coat_IOR: 1.5
+  coat_anisotropy: 0.0
+  coat_rotation: 0.0
+  coat_normal: [0.0, 0.0, 0.0]
+  coat_affect_color: 0.0
+  coat_affect_roughness: 0.0
+  thin_film_thickness: 0.0
+  thin_film_IOR: 1.5
+  emission: 0.0
+  emission_color: [1.0, 1.0, 1.0]
+  opacity: [1.0, 1.0, 1.0]
+  caustics: false
+  internal_reflections: true
+  exit_to_background: false
+  indirect_diffuse: 1.159999966621399
+  indirect_specular: 1.159999966621399
+  dielectric_priority: 0
+  aov_id1: ''
+  id1: [0.0, 0.0, 0.0]
+  aov_id2: ''
+  id2: [0.0, 0.0, 0.0]
+  aov_id3: ''
+  id3: [0.0, 0.0, 0.0]
+  aov_id4: ''
+  id4: [0.0, 0.0, 0.0]
+  aov_id5: ''
+  id5: [0.0, 0.0, 0.0]
+  aov_id6: ''
+  id6: [0.0, 0.0, 0.0]
+  aov_id7: ''
+  id7: [0.0, 0.0, 0.0]
+  aov_id8: ''
+  id8: [0.0, 0.0, 0.0]

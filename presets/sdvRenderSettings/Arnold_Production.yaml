@@ -1,0 +1,31 @@
+name: Production
+engine: arnold
+options:
+  ai:AA_samples:
+    enabled: true
+    value: 6
+  ai:GI_diffuse_samples:
+    enabled: true
+    value: 3
+  ai:GI_specular_samples:
+    enabled: true
+    value: 3
+  ai:GI_transmission_samples:
+    enabled: true
+    value: 3
+  ai:GI_sss_samples:
+    enabled: true
+    value: 3
+  ai:GI_volume_samples:
+    enabled: true
+    value: 2
+  ai:GI_total_depth:
+    enabled: true
+    value: 10
+  ai:enable_adaptive_sampling:
+    enabled: true
+    value: true
+  ai:AA_samples_max:
+    enabled: true
+    value: 12
+slots: []

@@ -1,0 +1,70 @@
+name: CoatedOrange
+shader: standard_surface
+parameters:
+  base: 0.6000000238418579
+  base_color: [0.9549999833106995, 0.6370000243186951, 0.15000000596046448]
+  diffuse_roughness: 0.0
+  specular: 0.699999988079071
+  specular_color: [0.7450000047683716, 0.304999977350235, -0.014999985694885254]
+  specular_roughness: 0.20000000298023224
+  specular_IOR: 1.0
+  specular_anisotropy: 0.0
+  specular_rotation: 0.0
+  metalness: 0.0
+  transmission: 0.0
+  transmission_color: [1.0, 1.0, 1.0]
+  transmission_depth: 0.0
+  transmission_scatter: [0.0, 0.0, 0.0]
+  transmission_scatter_anisotropy: 0.0
+  transmission_dispersion: 0.0
+  transmission_extra_roughness: 0.0
+  transmission_shadow_density: 0.5
+  transmit_aovs: false
+  subsurface: 0.0
+  subsurface_color: [1.0, 1.0, 1.0]
+  subsurface_radius: [1.0, 1.0, 1.0]
+  subsurface_scale: 1.0
+  subsurface_anisotropy: 0.0
+  subsurface_type: randomwalk
+  sheen: 0.0
+  sheen_color: [1.0, 1.0, 1.0]
+  sheen_roughness: 0.30000001192092896
+  thin_walled: false
+  normal: [0.0, 0.0, 0.0]
+  tangent: [0.0, 0.0, 0.0]
+  coat: 1.0
+  coat_color: [0.6200000047683716, 0.3905999958515167, -0.12000003457069397]
+  coat_roughness: 0.10000000149011612
+  coat_IOR: 1.5
+  coat_anisotropy: 0.0
+  coat_rotation: 0.0
+  coat_normal: [0.0, 0.0, 0.0]
+  coat_affect_color: 0.0
+  coat_affect_roughness: 0.0
+  thin_film_thickness: 0.0
+  thin_film_IOR: 1.5
+  emission: 0.009999999776482582
+  emission_color: [1.0, 0.4950000047683716, 0.17499999701976776]
+  opacity: [1.0, 1.0, 1.0]
+  caustics: true
+  internal_reflections: true
+  exit_to_background: false
+  indirect_diffuse: 1.0
+  indirect_specular: 1.0
+  dielectric_priority: 0
+  aov_id1: ''
+  id1: [0.0, 0.0, 0.0]
+  aov_id2: ''
+  id2: [0.0, 0.0, 0.0]
+  aov_id3: ''
+  id3: [0.0, 0.0, 0.0]
+  aov_id4: ''
+  id4: [0.0, 0.0, 0.0]
+  aov_id5: ''
+  id5: [0.0, 0.0, 0.0]
+  aov_id6: ''
+  id6: [0.0, 0.0, 0.0]
+  aov_id7: ''
+  id7: [0.0, 0.0, 0.0]
+  aov_id8: ''
+  id8: [0.0, 0.0, 0.0]

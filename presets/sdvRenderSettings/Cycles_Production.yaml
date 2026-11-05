@@ -1,0 +1,28 @@
+name: Production
+engine: cycles
+options:
+  cycles:session:samples:
+    enabled: true
+    value: 256
+  cycles:integrator:use_adaptive_sampling:
+    enabled: true
+    value: true
+  cycles:integrator:adaptive_threshold:
+    enabled: true
+    value: 0.01
+  cycles:integrator:adaptive_min_samples:
+    enabled: true
+    value: 32
+  cycles:integrator:max_bounce:
+    enabled: true
+    value: 12
+  cycles:integrator:max_diffuse_bounce:
+    enabled: true
+    value: 4
+  cycles:integrator:max_glossy_bounce:
+    enabled: true
+    value: 8
+  cycles:integrator:max_transmission_bounce:
+    enabled: true
+    value: 12
+slots: []

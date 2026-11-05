@@ -1,0 +1,19 @@
+name: Draft
+engine: renderman
+options:
+  ri:hider:maxsamples:
+    enabled: true
+    value: 32
+  ri:hider:minsamples:
+    enabled: true
+    value: 4
+  ri:Ri:PixelVariance:
+    enabled: true
+    value: 0.05
+  ri:hider:adaptivemetric:
+    enabled: true
+    value: variance
+  ri:hider:incremental:
+    enabled: true
+    value: true
+slots: []

@@ -1,0 +1,70 @@
+name: Plastic
+shader: standard_surface
+parameters:
+  base: 0.8899999856948853
+  base_color: [0.5076459646224976, -0.06145404279232025, 0.1094459742307663]
+  diffuse_roughness: 0.0
+  specular: 1.0
+  specular_color: [0.8399999737739563, 1.0866667032241821, 0.9566666483879089]
+  specular_roughness: 0.3499999940395355
+  specular_IOR: 1.5
+  specular_anisotropy: 0.6000000238418579
+  specular_rotation: 0.0
+  metalness: 0.0
+  transmission: 0.30000001192092896
+  transmission_color: [0.8258610963821411, 0.2033444344997406, 0.20082779228687286]
+  transmission_depth: 0.0
+  transmission_scatter: [0.0, 0.0, 0.0]
+  transmission_scatter_anisotropy: 0.0
+  transmission_dispersion: 0.0
+  transmission_extra_roughness: 0.0
+  transmission_shadow_density: 0.5
+  transmit_aovs: false
+  subsurface: 0.5
+  subsurface_color: [0.6733832359313965, 0.1533166468143463, -0.046699970960617065]
+  subsurface_radius: [0.8999999761581421, 0.8999999761581421, 0.8999999761581421]
+  subsurface_scale: 1.600000023841858
+  subsurface_anisotropy: 1.0
+  subsurface_type: diffusion
+  sheen: 0.0
+  sheen_color: [1.0, 1.0, 1.0]
+  sheen_roughness: 0.30000001192092896
+  thin_walled: false
+  normal: [0.0, 0.0, 0.0]
+  tangent: [0.0, 0.0, 0.0]
+  coat: 0.11999999731779099
+  coat_color: [1.0, 1.0, 1.0]
+  coat_roughness: 0.07999999821186066
+  coat_IOR: 1.5
+  coat_anisotropy: 0.0
+  coat_rotation: 0.0
+  coat_normal: [0.0, 0.0, 0.0]
+  coat_affect_color: 0.0
+  coat_affect_roughness: 0.0
+  thin_film_thickness: 0.0
+  thin_film_IOR: 1.5
+  emission: 0.0
+  emission_color: [1.0, 1.0, 1.0]
+  opacity: [1.0, 1.0, 1.0]
+  caustics: false
+  internal_reflections: true
+  exit_to_background: false
+  indirect_diffuse: 1.0
+  indirect_specular: 1.0
+  dielectric_priority: 0
+  aov_id1: ''
+  id1: [0.0, 0.0, 0.0]
+  aov_id2: ''
+  id2: [0.0, 0.0, 0.0]
+  aov_id3: ''
+  id3: [0.0, 0.0, 0.0]
+  aov_id4: ''
+  id4: [0.0, 0.0, 0.0]
+  aov_id5: ''
+  id5: [0.0, 0.0, 0.0]
+  aov_id6: ''
+  id6: [0.0, 0.0, 0.0]
+  aov_id7: ''
+  id7: [0.0, 0.0, 0.0]
+  aov_id8: ''
+  id8: [0.0, 0.0, 0.0]

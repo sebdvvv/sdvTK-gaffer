@@ -1,0 +1,19 @@
+name: Production
+engine: renderman
+options:
+  ri:hider:maxsamples:
+    enabled: true
+    value: 256
+  ri:hider:minsamples:
+    enabled: true
+    value: 16
+  ri:Ri:PixelVariance:
+    enabled: true
+    value: 0.01
+  ri:hider:adaptivemetric:
+    enabled: true
+    value: variance
+  ri:hider:incremental:
+    enabled: true
+    value: false
+slots: []
