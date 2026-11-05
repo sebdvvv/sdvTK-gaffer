@@ -4,6 +4,8 @@ This is an open-source contribution to [Gaffer](https://github.com/GafferHQ/gaff
 
 One toolkit for lighting, shading, and render settings. Install this repo instead of the separate node packages.
 
+<img width="856" height="333" alt="gaffer_2026-11-05_22-15-37" src="https://github.com/user-attachments/assets/1eb7f2e6-bf20-454e-b743-1b78dc23c4e7" />
+
 `ShadingTk` and `sdvRenderSettings` support Arnold, RenderMan, and Cycles. `ArnoldLight` and `ArnoldPhysicalSky` are Arnold.
 
 | Node | What it is | Node menu |
