@@ -543,16 +543,16 @@ class _sdvRenderSettingsWidget(CardNodeWidget):
             self._set_tab_label(index)
 
     def _set_tab_visible(self, index: int, visible: bool) -> None:
-        qt = self._tabs._qtWidget()
-        setter = getattr(qt, "setTabVisible", None)
-        tab_index = index + 1
-        if callable(setter):
-            try:
-                setter(tab_index, visible)
-                return
-            except Exception:
-                pass
+        # Slot tabs start after Standard Options, engine Options, and
+        # engine Attributes. Hide by widget so those three stay put.
+        if index < 1 or index > len(self._attr_tabs):
+            return
         tab = self._attr_tabs[index - 1]
+        try:
+            self._tabs.setTabVisible(tab, visible)
+            return
+        except Exception:
+            pass
         try:
             tab.setVisible(visible)
         except Exception:
@@ -577,7 +577,7 @@ class _sdvRenderSettingsWidget(CardNodeWidget):
             setter = getattr(qt, "setTabText", None)
             if callable(setter):
                 try:
-                    setter(index + 1, label)
+                    setter(self._tabs.index(tab), label)
                 except Exception:
                     pass
         header = self._slot_headers.get(index)
