@@ -4,13 +4,13 @@ This is an open-source contribution to [Gaffer](https://github.com/GafferHQ/gaff
 
 One toolkit for lighting, shading, and render settings. Install this repo instead of the separate node packages.
 
-Arnold is supported on every node. RenderMan and Cycles are supported on `sdvRenderSettings`, and as the sampling engine on `ShadingTk`.
+`ShadingTk` and `sdvRenderSettings` support Arnold, RenderMan, and Cycles. `ArnoldLight` and `ArnoldPhysicalSky` are Arnold.
 
 | Node | What it is | Node menu |
 | --- | --- | --- |
 | `ArnoldLight` | One node for any Arnold light (area, spot, mesh, …) | **Arnold → ArnoldLight** |
 | `ArnoldPhysicalSky` | Natural sky: physical sky, HDRI, or a flat colour dome | **Arnold → ArnoldPhysicalSky** |
-| `ShadingTk` | Assign, mix, texture, and edit Arnold shaders | **Arnold → ShadingTk** |
+| `ShadingTk` | Assign, mix, texture, and edit shaders | **Arnold → ShadingTk** |
 | `sdvRenderSettings` | Renderer options and attribute sets | **Render → sdvRenderSettings** |
 
 Gaffer type names stay the same (`ArnoldLight.ArnoldLight`, and the same pattern for the others), so existing `.gfr` scripts keep loading.
@@ -140,7 +140,7 @@ Regular lights (area, spot, mesh, …) are `ArnoldLight`.
 
 ShadingTk is a single-node toolkit for using all Gaffer shading capabilities. It automates the usual material, shader, and texture tasks — assign looks, plug in maps, load presets, tweak an existing shader, override samples — without wiring a chain of stock nodes by hand.
 
-Needs Gaffer with Arnold. It starts empty. Add shader slots when you need them (up to eight). Each slot is a shader type (for example `standard_surface`), a shader name (the handle in `ai:surface`), and the prims it lands on.
+Needs Gaffer with Arnold, RenderMan, or Cycles. It starts empty. Add shader slots when you need them (up to eight). Each slot is a shader type, a shader name, and the prims it lands on. The shader list follows **Render Engine** in Settings.
 
 **Create** assigns new shaders, a MixShader, and textures.
 
@@ -150,7 +150,7 @@ Needs Gaffer with Arnold. It starts empty. Add shader slots when you need them (
 | --- | --- | --- |
 | **Main** | Create | Nested tabs: **Globals**, **Shader slots** (**Add Shader slot**, then **Remove** on a slot), and **MixShader**. |
 | **Shaders** | Create | One material tab per slot — attributes, and a shared tab for values applied across slots. |
-| **Textures** | Create | Maps for the slots (image, noise, triplanar, and the other Arnold texture shaders). |
+| **Textures** | Create | Maps for the slots (image, noise, triplanar, and the other texture shaders for the current engine). |
 | **Edit Shader** | Edit | Tweak one existing surface shader. The node creates an EditScope after the incoming assignment and writes parameter edits there. Pick a shader; parameters load in this tab. |
 | **Edit Binding** | Edit | Copy an existing surface shader onto other prims. The shader is not duplicated. |
 | **Sampling** | Both | Renderer shading samples and optional shader-sample overrides. Off until you enable it. Uses **Render Engine** from Settings (Arnold, Cycles, or RenderMan). |
