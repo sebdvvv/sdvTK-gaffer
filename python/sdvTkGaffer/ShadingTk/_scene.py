@@ -564,6 +564,151 @@ def read_location_shader(node, path: str) -> tuple[str, Any]:
     return handle, shader
 
 
+def _child_path(path: str, child: Any) -> str:
+    leaf = str(child)
+    if path == "/":
+        return "/" + leaf
+    return path + "/" + leaf
+
+
+def _network_contains_handle(network, handle: str) -> bool:
+    handle = (handle or "").strip()
+    if not handle or network is None:
+        return False
+    if network_output_handle(network) == handle:
+        return True
+    return handle in network_shaders(network)
+
+
+def locations_bound_to_shader(scene, handle: str, limit: int = 4000) -> tuple[list[str], bool]:
+    """Locations where ``handle`` is the effective shader.
+
+    Includes the prim the shader is authored on and leaf prims that inherit
+    it (the meshes under that assignment). ``limit`` stops a ``...`` assignment
+    from selecting the whole stage. The second value is True when the walk
+    stopped early.
+    """
+    handle = (handle or "").strip()
+    if not handle or scene is None:
+        return [], False
+    found: list[str] = []
+    seen: set[str] = set()
+    visits = [0]
+    truncated = [False]
+
+    def add(path: str) -> None:
+        if not path or path == "/" or path in seen:
+            return
+        if len(found) >= limit:
+            truncated[0] = True
+            return
+        seen.add(path)
+        found.append(path)
+
+    def visit(path: str, inherited: dict[str, bool]) -> None:
+        if visits[0] >= _MAX_VISIT or truncated[0]:
+            if visits[0] >= _MAX_VISIT:
+                truncated[0] = True
+            return
+        visits[0] += 1
+        try:
+            if path != "/" and not scene.exists(path):
+                return
+        except Exception:
+            return
+        local: dict[str, bool] = {}
+        try:
+            attrs = scene.attributes(path)
+        except Exception:
+            attrs = None
+        if attrs is not None:
+            for attr, network in iter_shader_networks(attrs):
+                local[attr] = _network_contains_handle(network, handle)
+        effective = dict(inherited)
+        effective.update(local)
+        bound = any(effective.values())
+        authors = any(local.values())
+        try:
+            children = list(scene.childNames(path) or [])
+        except Exception:
+            children = []
+        if bound and (authors or not children):
+            add(path)
+        if truncated[0]:
+            return
+        for child in children:
+            visit(_child_path(path, child), effective)
+
+    visit("/", {})
+    return found, truncated[0]
+
+
+def _full_attributes(scene, path: str):
+    full = getattr(scene, "fullAttributes", None)
+    if not callable(full):
+        return None
+    try:
+        return full(path)
+    except Exception:
+        return None
+
+
+def _effective_networks(scene, path: str) -> list[tuple[str, Any]]:
+    """Shader networks at ``path``, including ones inherited from parents."""
+    attrs = _full_attributes(scene, path)
+    if attrs is not None:
+        return list(iter_shader_networks(attrs))
+    chain: list[str] = []
+    current = path or "/"
+    guard = 0
+    while current and guard < 256:
+        chain.append(current)
+        if current == "/":
+            break
+        parent = current.rsplit("/", 1)[0]
+        current = parent if parent else "/"
+        guard += 1
+    by_attr: dict[str, Any] = {}
+    for item in reversed(chain):
+        try:
+            attrs = scene.attributes(item)
+        except Exception:
+            attrs = None
+        if attrs is None:
+            continue
+        for attr, network in iter_shader_networks(attrs):
+            by_attr[attr] = network
+    return list(by_attr.items())
+
+
+def assigned_shader_handles(scene, paths: list[str]) -> list[str]:
+    """Output shader handles effective at ``paths`` (surface first)."""
+    if scene is None:
+        return []
+    ordered: list[str] = []
+    seen: set[str] = set()
+    for raw in paths or []:
+        path = str(raw or "").strip()
+        if not path:
+            continue
+        surface: list[str] = []
+        other: list[str] = []
+        for attr, network in _effective_networks(scene, path):
+            handle = network_output_handle(network)
+            if not handle:
+                continue
+            if attr in SURFACE_ATTRS:
+                surface.append(handle)
+            else:
+                other.append(handle)
+        for handle in surface + other:
+            if handle in seen:
+                continue
+            seen.add(handle)
+            ordered.append(handle)
+    return ordered
+
+
 def read_location_shader_edit(node, path: str) -> tuple[str, Any, str, str]:
     """``handle (Name), shader, attribute, type (Value)`` at ``path``."""
     path = (path or "").strip()

@@ -41,12 +41,14 @@ from sdvTkGafferUI import arnoldViewer  # noqa: E402
 from sdvTkGafferUI import hierarchyBrowse  # noqa: E402
 from sdvTkGafferUI import menu as sdv_menu  # noqa: E402
 from sdvTkGafferUI import scriptEditor  # noqa: E402
+from sdvTkGafferUI import shaderBinding  # noqa: E402
 from sdvTkGafferUI import uiTweaks  # noqa: E402
 from sdvTkGafferUI import viewerSync  # noqa: E402
 
 arnoldViewer.install(application)
 viewerSync.install(application)
 hierarchyBrowse.install(application)
+shaderBinding.install(application)
 uiTweaks.install(application)
 scriptEditor.install(application)
 sdv_menu.install(application)

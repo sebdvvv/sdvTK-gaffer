@@ -2,7 +2,7 @@
 
 This is an open-source contribution to [Gaffer](https://github.com/GafferHQ/gaffer), for anyone who wants a quick, production-shaped Arnold lighting workflow instead of wiring stock nodes by hand. It is designed around production-standard requirements, including a single node that provides every element needed for natural sky lighting.
 
-One toolkit for lighting, shading, and render settings. 
+One toolkit for lighting, shading, and render settings. Install this repo instead of the separate node packages.
 
 <img width="856" height="333" alt="gaffer_2026-11-05_22-15-37" src="https://github.com/user-attachments/assets/1eb7f2e6-bf20-454e-b743-1b78dc23c4e7" />
 
@@ -34,13 +34,13 @@ export GAFFER_STARTUP_PATHS="/path/to/sdvTK-gaffer/startup:${GAFFER_STARTUP_PATH
 
 Windows: use `;` instead of `:`. Farm / `gaffer execute` needs the same variables.
 
-Restart Gaffer. The four nodes appear in the menus above. The menu bar gains **sdvTk**, with **Options**, **Texture Manager**, and **About**.
+Restart Gaffer. The four nodes appear in the menus above. The menu bar gains **sdvTk**, with **Options**, **Shader Manager**, **Texture Manager**, and **About**.
 
 Arnold Viewer settings ship in `startup/gui/arnoldViewerSettings.gfr`. Shading, Lighting, and Textures default to **Full** (the viewport settings menu, top left). That registration runs after Gaffer's own viewer startup.
 
 **Options** are stored in `~/gaffer/sdvtk_prefs.json`. They cover graph double-click, the graph navigation menu, Hierarchy browse-without-render, and the Python Editor swap. The swap is off until you check it. Set the [pw_MultiScriptEditor](https://github.com/sebdvvv/pw_MultiScriptEditor) folder in that same dialog (the folder that contains `multi_script_editor`, or the package folder itself). That path is saved with the other preferences. On the next launch, startup adds it to `PYTHONPATH` and uses the package as the Python Editor, docked under the Graph Editor. If that import fails, Gaffer's Python Editor stays.
 
-
+If the old `arnoldLight-gaffer`, `shadingTk-gaffer`, `arnoldPhysicalSky-gaffer`, or `renderConfig-gaffer` paths are still on `PYTHONPATH` or `GAFFER_STARTUP_PATHS`, remove them so only this toolkit is loaded.
 
 ```
 python/sdvTkGaffer/      node implementations
@@ -146,7 +146,7 @@ Regular lights (area, spot, mesh, …) are `ArnoldLight`.
 
 ShadingTk is a single-node toolkit for using all Gaffer shading capabilities. It automates the usual material, shader, and texture tasks — assign looks, plug in maps, load presets, tweak an existing shader, override samples — without wiring a chain of stock nodes by hand.
 
-Needs Gaffer with Arnold, RenderMan, or Cycles. It starts empty. Add shader slots when you need them (up to eight). Each slot is a shader type, a shader name, and the prims it lands on. The shader list follows **Render Engine** in Settings.
+Needs Gaffer with Arnold, RenderMan, or Cycles. It starts empty. Add shader slots when you need them (up to eight). Each slot is a shader type, a shader name, and the prims it lands on. The shader list follows **Render Engine** on the node, above the tabs.
 
 **Create** assigns new shaders, a MixShader, and textures.
 
@@ -155,14 +155,14 @@ Needs Gaffer with Arnold, RenderMan, or Cycles. It starts empty. Add shader slot
 | Tab | When | What it is |
 | --- | --- | --- |
 | **Main** | Create | Nested tabs: **Globals**, **Shader slots** (**Add Shader slot**, then **Remove** on a slot), and **MixShader**. |
-| **Shaders** | Create | One material tab per slot — attributes, and a shared tab for values applied across slots. |
-| **Textures** | Create | Maps for the slots (image, noise, triplanar, and the other texture shaders for the current engine). |
 | **Edit Shader** | Edit | Tweak one existing surface shader. The node creates an EditScope after the incoming assignment and writes parameter edits there. Pick a shader; parameters load in this tab. |
 | **Edit Binding** | Edit | Copy an existing surface shader onto other prims. The shader is not duplicated. |
-| **Sampling** | Both | Renderer shading samples and optional shader-sample overrides. Off until you enable it. Uses **Render Engine** from Settings (Arnold, Cycles, or RenderMan). |
-| **Settings** | Both | **Render Engine**. In Create mode, also naming (auto-name, prefix, suffix). |
+| **Sampling** | Both | Renderer shading samples and optional shader-sample overrides. Off until you enable it. Uses **Render Engine** on the node (Arnold, Cycles, or RenderMan). |
+| **Settings** | Both | In Create mode, naming (auto-name, prefix, suffix). |
 
-On a material tab, **Presets** loads or saves YAML looks. Built-in samples live in `presets/ShadingTk/`. Point **Preset Folder** at your own directory, or set `SHADINGTK_PRESET_PATH`.
+**ShadingTk Manager** sits on the node, directly under **Render Engine**, above the tabs. It is one window with a **Shaders** tab and a **Textures** tab. Shaders are listed in the order they connect, ending at a texture or at the shader itself. Select a shader to edit its attributes, including the TXT button on RGB colours. Textures are listed first. **Edit** on a shader slot opens that shader on the Shaders tab. The **sdvTk** menu items **Shader Manager** and **Texture Manager** open the same window on the matching tab.
+
+In Shader Manager, **Presets** loads or saves YAML looks. Built-in samples live in `presets/ShadingTk/`. Point **Preset Folder** at your own directory, or set `SHADINGTK_PRESET_PATH`.
 
 Copy / Paste / Reset on the card header move values between ShadingTk nodes.
 

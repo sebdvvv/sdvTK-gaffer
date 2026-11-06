@@ -210,7 +210,9 @@ class CardNodeWidget(GafferUI.Widget):
     def _onPlugDirtied(self, plug: Any) -> None:
         pass
 
-    def _addCard(self, title: str) -> GafferUI.ListContainer:
+    def _addCard(
+        self, title: str, header_widgets: list | None = None
+    ) -> GafferUI.ListContainer:
         card = GafferUI.Frame()
         body = GafferUI.ListContainer(
             GafferUI.ListContainer.Orientation.Vertical, spacing=8
@@ -219,6 +221,8 @@ class CardNodeWidget(GafferUI.Widget):
             GafferUI.ListContainer.Orientation.Horizontal, spacing=4
         )
         header.append(GafferUI.Label("<h3>{}</h3>".format(title)))
+        for widget in header_widgets or ():
+            header.append(widget)
         header.append(GafferUI.Spacer(imath.V2i(8, 1)), expand=True)
         for label, tip, method in (
             (

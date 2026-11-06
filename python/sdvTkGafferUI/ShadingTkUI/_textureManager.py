@@ -22,17 +22,29 @@ def _qt():
     return QtCore, QtGui, QtWidgets
 
 
-class TextureManagerWindow(GafferUI.Window):
+def acquire_texture_manager(node, parent=None, name: str | None = None):
+    """Open ShadingTk Manager on the Textures tab."""
+    from ._managerWindow import acquire_shadingtk_manager
+
+    texture_name = (name or "").strip() or None
+    return acquire_shadingtk_manager(
+        node, parent, page="textures", texture_name=texture_name
+    )
+
+
+class TextureManagerWindow(GafferUI.ListContainer):
     """Frozen tree of this ShadingTk plus textures fed from upstream nodes."""
 
     def __init__(self, node, **kw) -> None:
-        kw.setdefault("sizeMode", GafferUI.Window.SizeMode.Manual)
-        try:
-            GafferUI.Window.__init__(self, "ShadingTk Texture Manager", **kw)
-        except TypeError:
-            kw.pop("sizeMode", None)
-            GafferUI.Window.__init__(self, "ShadingTk Texture Manager", **kw)
+        GafferUI.ListContainer.__init__(
+            self,
+            GafferUI.ListContainer.Orientation.Vertical,
+            spacing=6,
+            borderWidth=8,
+            **kw,
+        )
         self.__node = node
+        self.__connections: list = []
         try:
             self.__node.ensureTextureSettingsPlugs()
         except Exception:
@@ -41,9 +53,6 @@ class TextureManagerWindow(GafferUI.Window):
         self.__icons: dict[str, object] = {}
         QtCore, QtGui, QtWidgets = _qt()
 
-        column = GafferUI.ListContainer(
-            GafferUI.ListContainer.Orientation.Vertical, spacing=6, borderWidth=8
-        )
         main = GafferUI.ListContainer(
             GafferUI.ListContainer.Orientation.Vertical, spacing=6
         )
@@ -58,20 +67,26 @@ class TextureManagerWindow(GafferUI.Window):
         header.append(self.__hint, expand=True)
         expand_btn = GafferUI.Button("Expand")
         expand_btn.setToolTip("Expand the whole tree.")
-        expand_btn.clickedSignal().connect(
-            Gaffer.WeakMethod(self.__onExpandAll), scoped=True
+        self.__connections.append(
+            expand_btn.clickedSignal().connect(
+                Gaffer.WeakMethod(self.__onExpandAll), scoped=True
+            )
         )
         collapse_btn = GafferUI.Button("Collapse")
         collapse_btn.setToolTip("Collapse the whole tree.")
-        collapse_btn.clickedSignal().connect(
-            Gaffer.WeakMethod(self.__onCollapseAll), scoped=True
+        self.__connections.append(
+            collapse_btn.clickedSignal().connect(
+                Gaffer.WeakMethod(self.__onCollapseAll), scoped=True
+            )
         )
         refresh_btn = GafferUI.Button("Refresh")
         refresh_btn.setToolTip(
             "Reload the snapshot from this ShadingTk and upstream nodes."
         )
-        refresh_btn.clickedSignal().connect(
-            Gaffer.WeakMethod(self.refresh), scoped=True
+        self.__connections.append(
+            refresh_btn.clickedSignal().connect(
+                Gaffer.WeakMethod(self.refresh), scoped=True
+            )
         )
         header.append(expand_btn)
         header.append(collapse_btn)
@@ -82,8 +97,10 @@ class TextureManagerWindow(GafferUI.Window):
             GafferUI.ListContainer.Orientation.Horizontal, spacing=6
         )
         add_btn = GafferUI.Button("Add files…")
-        add_btn.clickedSignal().connect(
-            Gaffer.WeakMethod(self.__onAddFiles), scoped=True
+        self.__connections.append(
+            add_btn.clickedSignal().connect(
+                Gaffer.WeakMethod(self.__onAddFiles), scoped=True
+            )
         )
         tools.append(add_btn)
         remove_btn = GafferUI.Button("Remove selected")
@@ -91,8 +108,10 @@ class TextureManagerWindow(GafferUI.Window):
             "Remove a texture stored on this ShadingTk from TxLibrary. "
             "Shader connections to it are disconnected first."
         )
-        remove_btn.clickedSignal().connect(
-            Gaffer.WeakMethod(self.__onRemove), scoped=True
+        self.__connections.append(
+            remove_btn.clickedSignal().connect(
+                Gaffer.WeakMethod(self.__onRemove), scoped=True
+            )
         )
         tools.append(remove_btn)
         unused_btn = GafferUI.Button("Remove unused")
@@ -100,8 +119,10 @@ class TextureManagerWindow(GafferUI.Window):
             "Remove TxLibrary textures on this node that are not "
             "connected to any shader input."
         )
-        unused_btn.clickedSignal().connect(
-            Gaffer.WeakMethod(self.__onRemoveUnused), scoped=True
+        self.__connections.append(
+            unused_btn.clickedSignal().connect(
+                Gaffer.WeakMethod(self.__onRemoveUnused), scoped=True
+            )
         )
         tools.append(unused_btn)
         main.append(tools)
@@ -173,37 +194,49 @@ class TextureManagerWindow(GafferUI.Window):
             if signal is None:
                 signal = getattr(self.__tabs, "currentTabChangedSignal", None)
             if signal is not None:
-                signal().connect(
-                    Gaffer.WeakMethod(self.__onTabChanged), scoped=True
+                self.__connections.append(
+                    signal().connect(
+                        Gaffer.WeakMethod(self.__onTabChanged), scoped=True
+                    )
                 )
         except Exception:
             pass
-        column.append(self.__tabs, expand=True)
+        self.append(self.__tabs, expand=True)
         self.__status = GafferUI.Label("")
-        column.append(self.__status)
-        self.setChild(column)
-        try:
-            self._qtWidget().resize(980, 560)
-        except Exception:
-            pass
+        self.append(self.__status)
 
-        self.__dropEnter = self.dragEnterSignal().connect(
-            Gaffer.WeakMethod(self.__dragEnter), scoped=True
+        self.__connections.append(
+            self.dragEnterSignal().connect(
+                Gaffer.WeakMethod(self.__dragEnter), scoped=True
+            )
         )
-        self.__drop = self.dropSignal().connect(
-            Gaffer.WeakMethod(self.__drop), scoped=True
+        self.__connections.append(
+            self.dropSignal().connect(
+                Gaffer.WeakMethod(self.__drop), scoped=True
+            )
         )
         try:
             self._qtWidget().setAcceptDrops(True)
         except Exception:
             pass
-        self.__plugDirtied = self.__node.plugDirtiedSignal().connect(
-            Gaffer.WeakMethod(self.__onSettingsPlug), scoped=True
-        )
+        try:
+            self.__connections.append(
+                self.__node.plugDirtiedSignal().connect(
+                    Gaffer.WeakMethod(self.__onSettingsPlug), scoped=True
+                )
+            )
+        except Exception:
+            pass
         self.refresh()
 
     def node(self):
         return self.__node
+
+    def dragEnter(self, widget, event) -> bool:
+        return self.__dragEnter(widget, event)
+
+    def drop(self, widget, event) -> bool:
+        return self.__drop(widget, event)
 
     def showTexture(self, name: str) -> None:
         """Select a library texture and show its node attributes."""

@@ -1732,6 +1732,212 @@ class ShadingTk(SceneInsertMixin, Gaffer.Box):
             )
         return {"library": library, "shaders": shaders}
 
+    def shaderFromManagerKey(self, key: str):
+        key = (key or "").strip()
+        if key == "diag":
+            return self.diagnosticShader()
+        return self.shaderFromTextureManagerKey(key)
+
+    def shaderManagerSnapshot(self) -> dict:
+        """Shaders in connection order, each ending at a texture or itself."""
+        entries = self._shader_manager_entries()
+        by_key = {entry["key"]: entry for entry in entries}
+        id_to_key = {}
+        for entry in entries:
+            node = entry.get("node")
+            if node is not None:
+                id_to_key[id(node)] = entry["key"]
+        children: dict[str, list[str]] = {entry["key"]: [] for entry in entries}
+        endpoints: dict[str, list[dict]] = {entry["key"]: [] for entry in entries}
+        parent: dict[str, str] = {}
+        for entry in entries:
+            node = entry.get("node")
+            if node is None or "parameters" not in node:
+                continue
+            try:
+                plugs = list(node["parameters"].children())
+            except Exception:
+                plugs = []
+            for plug in plugs:
+                self._link_shader_plug(
+                    plug,
+                    plug.getName(),
+                    entry["key"],
+                    id_to_key,
+                    children,
+                    endpoints,
+                    parent,
+                )
+            if entry["key"].startswith("slot:"):
+                self._link_slot_displacement(
+                    entry, id_to_key, children, endpoints, parent
+                )
+        order = []
+        if "mix" in by_key and "mix" not in parent:
+            order.append("mix")
+        for entry in entries:
+            if entry["key"] in parent or entry["key"] in order:
+                continue
+            order.append(entry["key"])
+        roots = [
+            self._shader_tree_dict(key, by_key, children, endpoints) for key in order
+        ]
+        return {"roots": roots}
+
+    def _shader_manager_entries(self) -> list[dict]:
+        entries = []
+        try:
+            count = int(self["slotCount"].getValue())
+        except Exception:
+            count = 0
+        for index in range(1, count + 1):
+            shader = self.slotShader(index)
+            if shader is None:
+                continue
+            shader_type = ""
+            try:
+                shader_type = self[shader_type_plug(index)].getValue() or ""
+            except Exception:
+                shader_type = ""
+            entries.append(
+                {
+                    "key": "slot:{}".format(index),
+                    "name": self._shader_handle_name(index),
+                    "type": shader_type,
+                    "node": shader,
+                }
+            )
+        optional = (
+            ("global", "globalAssign", self.globalShader, ALL_SHADER_NAME),
+            ("matte", "matteEnabled", self.matteShader, MATTE_SHADER_NAME),
+            ("diag", "diagEnabled", self.diagnosticShader, DIAG_SHADER_NAME),
+            ("mix", "mixEnabled", self.mixShader, MIX_SHADER_NAME),
+        )
+        for key, flag, getter, fallback in optional:
+            try:
+                enabled = bool(self[flag].getValue())
+            except Exception:
+                enabled = False
+            if not enabled:
+                continue
+            try:
+                shader = getter()
+            except Exception:
+                shader = None
+            if shader is None:
+                continue
+            shader_type = ""
+            try:
+                if "name" in shader:
+                    shader_type = shader["name"].getValue() or ""
+            except Exception:
+                shader_type = ""
+            name = fallback
+            try:
+                name = shader.getName() or fallback
+            except Exception:
+                name = fallback
+            entries.append(
+                {
+                    "key": key,
+                    "name": name,
+                    "type": shader_type,
+                    "node": shader,
+                }
+            )
+        return entries
+
+    def _link_shader_plug(
+        self, plug, label, key, id_to_key, children, endpoints, parent
+    ) -> None:
+        if plug is None:
+            return
+        source_node = None
+        try:
+            source = plug.getInput()
+        except Exception:
+            source = None
+        if source is not None:
+            try:
+                source_node = source.node()
+            except Exception:
+                source_node = None
+        if source_node is not None:
+            child_key = id_to_key.get(id(source_node))
+            if child_key and child_key != key and child_key not in parent:
+                parent[child_key] = key
+                children[key].append(child_key)
+                return
+            if self._is_texture_node(source_node):
+                path = ""
+                try:
+                    if (
+                        "parameters" in source_node
+                        and "filename" in source_node["parameters"]
+                    ):
+                        path = source_node["parameters"]["filename"].getValue() or ""
+                except Exception:
+                    path = ""
+                try:
+                    state = self.texturePlugState(plug)
+                except Exception:
+                    state = "connected"
+                try:
+                    texture_name = source_node.getName() or ""
+                except Exception:
+                    texture_name = ""
+                endpoints[key].append(
+                    {
+                        "kind": "texture",
+                        "label": label,
+                        "name": texture_name,
+                        "path": path,
+                        "state": state,
+                    }
+                )
+                return
+        try:
+            kids = list(plug.children())
+        except Exception:
+            kids = []
+        for child in kids:
+            child_label = "{}.{}".format(label, child.getName())
+            self._link_shader_plug(
+                child, child_label, key, id_to_key, children, endpoints, parent
+            )
+
+    def _link_slot_displacement(self, entry, id_to_key, children, endpoints, parent) -> None:
+        try:
+            index = int(entry["key"].split(":", 1)[1])
+        except Exception:
+            return
+        displacement = self.slotDisplacement(index)
+        if displacement is None or "map" not in displacement:
+            return
+        self._link_shader_plug(
+            displacement["map"],
+            "displacement",
+            entry["key"],
+            id_to_key,
+            children,
+            endpoints,
+            parent,
+        )
+
+    def _shader_tree_dict(self, key, by_key, children, endpoints) -> dict:
+        entry = by_key[key]
+        return {
+            "key": key,
+            "name": entry.get("name") or key,
+            "type": entry.get("type") or "",
+            "endpoints": list(endpoints.get(key) or []),
+            "children": [
+                self._shader_tree_dict(child, by_key, children, endpoints)
+                for child in children.get(key) or []
+                if child in by_key
+            ],
+        }
+
     def _texture_manager_shader_entries(self) -> list[dict]:
         entries: list[dict] = []
         try:

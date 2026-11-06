@@ -33,7 +33,6 @@ from sdvTkGaffer.ShadingTk._data import (
     texture_type_plug,
     displacement_type_plug,
 )
-from ._textureManager import TextureManagerWindow
 from sdvTkGaffer.ShadingTk._sampling import (
     SAMPLE_OPTION_KEYS,
     engine_label,
@@ -454,19 +453,36 @@ class _ExistingSamplingShaderWidget(GafferUI.PlugValueWidget):
 
 
 class _ShadingTkWidget(CardNodeWidget):
-    """Create (Main / Shaders / Textures / Settings) or Edit (Edit Shader / Edit Binding / Settings) plus Sampling."""
+    """Create (Main / Sampling / Settings) or Edit (Edit Shader / Edit Binding / Settings) plus Sampling."""
 
     _LABEL_W = 130
 
     def _build(self) -> None:
         self._node.ensureModePlug()
         self._node.ensureAssignPlugs()
-        card = self._addCard("ShadingTk")
+        engine = native_widget(self._node["samplingEngine"])
+        try:
+            engine.setToolTip(
+                "Renderer for this node (Arnold, Cycles, or RenderMan). "
+                "Sampling and shader-stage overrides use this engine."
+            )
+        except Exception:
+            pass
+        card = self._addCard("ShadingTk", header_widgets=[engine])
+        manager = GafferUI.Button("ShadingTk Manager")
+        manager.setToolTip(
+            "Open ShadingTk Manager. Shaders and textures are separate tabs."
+        )
+        self._buttonConnections.append(
+            manager.clickedSignal().connect(
+                Gaffer.WeakMethod(self.__onOpenManager), scoped=True
+            )
+        )
+        card.append(manager)
         mode = native_widget(self._node["mode"])
         try:
             mode.setToolTip(
-                "Create assigns new shaders, Mix, and textures. "
-                "Shader parameter tabs live under Shaders. "
+                "Create assigns new shaders and a Mix. "
                 "Edit loads Edit Shader, Edit Binding, and Settings "
                 "(plus Sampling) to tweak or reuse existing shaders."
             )
@@ -480,9 +496,6 @@ class _ShadingTkWidget(CardNodeWidget):
 
         self._tab_main = GafferUI.TabbedContainer()
         expand_h(self._tab_main)
-        self._shader_tabs_host = GafferUI.TabbedContainer()
-        expand_h(self._shader_tabs_host)
-        self._tab_shaders = self._shader_tabs_host
 
         globals_form = GafferUI.ListContainer(
             GafferUI.ListContainer.Orientation.Vertical, spacing=8
@@ -496,7 +509,6 @@ class _ShadingTkWidget(CardNodeWidget):
         )
         self._add_tab(self._tab_main, self._scroll(main_form), "Shader slots")
         self._add_tab(self._tabs, self._tab_main, "Main")
-        self._add_tab(self._tabs, self._shader_tabs_host, "Shaders")
 
         buttons = GafferUI.ListContainer(
             GafferUI.ListContainer.Orientation.Horizontal, spacing=6
@@ -538,11 +550,6 @@ class _ShadingTkWidget(CardNodeWidget):
         self._edit_hint = None
         self._edit_status = None
         self._edit_params = None
-        self._global_form = GafferUI.ListContainer(
-            GafferUI.ListContainer.Orientation.Vertical, spacing=6
-        )
-        self._global_tab = self._scroll(self._global_form)
-        self._add_tab(self._shader_tabs_host, self._global_tab, ALL_SHADER_NAME)
         self._global_filled = False
 
         mix_form = GafferUI.ListContainer(
@@ -552,13 +559,6 @@ class _ShadingTkWidget(CardNodeWidget):
         self._tab_mix = self._scroll(mix_form)
         self._add_tab(self._tab_main, self._tab_mix, "MixShader")
         self._build_mix_tab(mix_form)
-
-        textures_form = GafferUI.ListContainer(
-            GafferUI.ListContainer.Orientation.Vertical, spacing=8
-        )
-        self._tab_textures = self._scroll(textures_form)
-        self._add_tab(self._tabs, self._tab_textures, "Textures")
-        self._build_textures_tab(textures_form)
 
         sampling_form = GafferUI.ListContainer(
             GafferUI.ListContainer.Orientation.Vertical, spacing=8
@@ -708,11 +708,7 @@ class _ShadingTkWidget(CardNodeWidget):
         self._syncSamplingControls()
 
     def _apply_tab_visibility(self, edit: bool) -> None:
-        create_tabs = (
-            getattr(self, "_tab_main", None),
-            getattr(self, "_tab_shaders", None),
-            getattr(self, "_tab_textures", None),
-        )
+        create_tabs = (getattr(self, "_tab_main", None),)
         for tab in create_tabs:
             self._set_top_tab_visible(tab, not edit)
         self._set_top_tab_visible(getattr(self, "_assign_tab", None), edit)
@@ -851,15 +847,6 @@ class _ShadingTkWidget(CardNodeWidget):
         self._syncGlobalControls()
 
     def _build_settings_tab(self, form: GafferUI.ListContainer) -> None:
-        engine = native_widget(self._node["samplingEngine"])
-        try:
-            engine.setToolTip(
-                "Renderer for this node (Arnold, Cycles, or RenderMan). "
-                "Sampling and shader-stage overrides use this engine."
-            )
-        except Exception:
-            pass
-        self._addRow(form, "Render Engine", engine, name="samplingEngine")
         naming = GafferUI.ListContainer(
             GafferUI.ListContainer.Orientation.Vertical, spacing=8
         )
@@ -932,10 +919,6 @@ class _ShadingTkWidget(CardNodeWidget):
             )
             self._mix_input_rows[index] = row
             self._mix_input_buttons[index] = button
-        self._mix_params = GafferUI.ListContainer(
-            GafferUI.ListContainer.Orientation.Vertical, spacing=6
-        )
-        form.append(self._mix_params)
         form.append(GafferUI.Label("<b>Assign</b>"))
         form.append(
             GafferUI.Label(
@@ -969,7 +952,7 @@ class _ShadingTkWidget(CardNodeWidget):
         self._slot_headers[index] = title
         header.append(GafferUI.Spacer(imath.V2i(8, 1)), expand=True)
         edit = GafferUI.Button("Edit")
-        edit.setToolTip("Open this slot on the Shaders tab.")
+        edit.setToolTip("Open this shader in the Shader Manager.")
         self._buttonConnections.append(
             edit.clickedSignal().connect(
                 functools.partial(self.__onEditSlot, index), scoped=True
@@ -1265,27 +1248,41 @@ class _ShadingTkWidget(CardNodeWidget):
         self._textures_status = GafferUI.Label("")
         form.append(self._textures_status)
 
-    def __onOpenTextureManager(self, *unused) -> None:
-        window = getattr(self, "_texture_window", None)
-        created = window is None or not widget_is_alive(window)
-        if created:
-            window = TextureManagerWindow(self._node)
-            self._texture_window = window
-            parent = self.ancestor(GafferUI.Window)
-            try:
-                window.setSizeMode(GafferUI.Window.SizeMode.Manual)
-            except Exception:
-                pass
-            if parent is not None:
-                try:
-                    parent.addChildWindow(window)
-                except Exception:
-                    pass
+    def __onOpenManager(self, *unused) -> None:
+        from ._managerWindow import acquire_shadingtk_manager
+
+        parent = None
         try:
-            window.setVisible(True)
-            window.reveal()
+            parent = self.ancestor(GafferUI.Window)
         except Exception:
-            pass
+            parent = None
+        window = acquire_shadingtk_manager(self._node, parent)
+        self._shader_window = window
+        self._texture_window = window
+
+    def __onOpenShaderManager(self, key=None, *unused) -> None:
+        from ._shaderManager import acquire_shader_manager
+
+        if not isinstance(key, str):
+            key = None
+        parent = None
+        try:
+            parent = self.ancestor(GafferUI.Window)
+        except Exception:
+            parent = None
+        window = acquire_shader_manager(self._node, parent, key)
+        self._shader_window = window
+
+    def __onOpenTextureManager(self, *unused) -> None:
+        from ._textureManager import acquire_texture_manager
+
+        parent = None
+        try:
+            parent = self.ancestor(GafferUI.Window)
+        except Exception:
+            parent = None
+        window = acquire_texture_manager(self._node, parent)
+        self._texture_window = window
         try:
             count = len(self._node.visibleLibraryTextures())
             local = len(self._node.libraryTextures())
@@ -1299,7 +1296,7 @@ class _ShadingTkWidget(CardNodeWidget):
         form.append(
             GafferUI.Label(
                 "Override renderer shading samples and shader sample "
-                "parameters. Nothing is scanned until this is enabled."
+                "parameters."
             )
         )
         enabled = native_widget(self._node["samplingEnabled"])
@@ -1313,11 +1310,6 @@ class _ShadingTkWidget(CardNodeWidget):
         self._addRow(
             form, "Enable Shader sampling overrides", enabled, name="samplingEnabled"
         )
-        self._sampling_hint = GafferUI.Label(
-            "Turn on to author shading-sample overrides for the "
-            "Render Engine chosen in Settings."
-        )
-        form.append(self._sampling_hint)
 
         self._sampling_body = GafferUI.ListContainer(
             GafferUI.ListContainer.Orientation.Vertical, spacing=8
@@ -1464,7 +1456,7 @@ class _ShadingTkWidget(CardNodeWidget):
         if owner is not None and mix is not None and mix.isSame(owner):
             if not self._is_edit_mode():
                 self._mix_params_key = None
-                self._fill_mix_params()
+                self._refresh_shader_manager()
             return
         if name != "in":
             return
@@ -1688,35 +1680,13 @@ class _ShadingTkWidget(CardNodeWidget):
             visible = bool(self._node["globalAssign"].getValue())
         except Exception:
             visible = False
-        tab = getattr(self, "_global_tab", None)
-        host = getattr(self, "_shader_tabs_host", None)
-        if tab is not None and host is not None:
-            try:
-                host.setTabVisible(tab, visible)
-            except Exception:
-                try:
-                    tab.setVisible(visible)
-                except Exception:
-                    pass
         if visible:
-            self._fill_global_shader_tab()
+            self._refresh_shader_manager()
         self._syncGlobalControls()
         self._bind_texture_label_watchers()
 
     def _fill_global_shader_tab(self) -> None:
-        form = getattr(self, "_global_form", None)
-        if form is None or not widget_is_alive(self) or self._is_edit_mode():
-            return
-        _clear_container(form)
-        header = GafferUI.ListContainer(
-            GafferUI.ListContainer.Orientation.Horizontal, spacing=6
-        )
-        header.append(GafferUI.Label("<b>{}</b>".format(ALL_SHADER_NAME)))
-        header.append(GafferUI.Spacer(imath.V2i(8, 1)), expand=True)
-        form.append(header)
-        form.append(GafferUI.Label("Material"))
-        for plug in self._node.globalParameterPlugs():
-            self._add_shader_param_row(form, plug)
+        self._refresh_shader_manager()
         self._global_filled = True
 
     def _syncMixControls(self) -> None:
@@ -1860,13 +1830,6 @@ class _ShadingTkWidget(CardNodeWidget):
 
     def _ensure_slot_ui(self, index: int) -> None:
         self._slot_host.append(self._build_slot(index))
-        form = GafferUI.ListContainer(
-            GafferUI.ListContainer.Orientation.Vertical, spacing=6
-        )
-        scroll = self._scroll(form)
-        self._shader_forms.append(form)
-        self._shader_tabs.append(scroll)
-        self._add_tab(self._shader_tabs_host, scroll, self._slot_tab_name(index))
 
     def _set_tab_visible(self, index: int, visible: bool) -> None:
         if index < 1 or index > len(self._shader_tabs):
@@ -2019,20 +1982,6 @@ class _ShadingTkWidget(CardNodeWidget):
             self._sampling_load_button.setEnabled(enabled and connected)
         except Exception:
             pass
-        if not enabled:
-            hint = "Turn on Enable Shader sampling overrides to author samples."
-        elif apply_all and not connected:
-            hint = "Renderer options apply now. Connect a scene to override shader samples on the stage."
-        elif loaded:
-            hint = "Editing sample parameters on the selected shader."
-        else:
-            hint = "Renderer {} shading samples. Shader-stage overrides need a connected in.".format(
-                engine_label(self._node["samplingEngine"].getValue())
-            )
-        try:
-            self._sampling_hint.setText(hint)
-        except Exception:
-            pass
         if enabled:
             self._fill_sampling_options()
             if loaded:
@@ -2148,22 +2097,11 @@ class _ShadingTkWidget(CardNodeWidget):
             pass
 
     def __onEditSlot(self, index: int, *unused) -> None:
-        self._focus_slot_shader(index)
+        self.__onOpenShaderManager("slot:{}".format(index))
 
     def _focus_slot_shader(self, index: int) -> None:
-        """Show Shaders, then the tab for this Create slot."""
-        if not widget_is_alive(self):
-            return
-        if index not in self.__filled_shader:
-            self._fill_shader_tab(index)
-        if index < 1 or index > len(self._shader_tabs):
-            return
-        shaders = getattr(self, "_tab_shaders", None)
-        if shaders is not None:
-            self.__set_current_tab(self._tabs, shaders)
-        host = getattr(self, "_shader_tabs_host", None)
-        if host is not None:
-            self.__set_current_tab(host, self._shader_tabs[index - 1])
+        """Open Shader Manager on this Create slot."""
+        self.__onOpenShaderManager("slot:{}".format(index))
 
     def __set_current_tab(self, tabs, child) -> None:
         if tabs is None or child is None or not widget_is_alive(child):
@@ -2188,21 +2126,7 @@ class _ShadingTkWidget(CardNodeWidget):
     def _set_tab_label(self, index: int) -> None:
         if not widget_is_alive(self):
             return
-        if index < 1 or index > len(self._shader_tabs):
-            return
         label = self._slot_tab_name(index)
-        tab = self._shader_tabs[index - 1]
-        host = getattr(self, "_shader_tabs_host", self._tabs)
-        try:
-            host.setLabel(tab, label)
-        except Exception:
-            qt = host._qtWidget()
-            setter = getattr(qt, "setTabText", None)
-            if callable(setter):
-                try:
-                    setter(host.index(tab), label)
-                except Exception:
-                    pass
         header = self._slot_headers.get(index)
         if header is not None and widget_is_alive(header):
             try:
@@ -2216,59 +2140,18 @@ class _ShadingTkWidget(CardNodeWidget):
         for index in range(1, len(self._shader_forms) + 1):
             self._fill_shader_tab(index)
 
-    def _fill_shader_tab(self, index: int) -> None:
-        if index < 1 or index > len(self._shader_forms):
+    def _refresh_shader_manager(self) -> None:
+        window = getattr(self, "_shader_window", None)
+        if window is None or not widget_is_alive(window):
             return
+        try:
+            window.refresh()
+        except Exception:
+            pass
+
+    def _fill_shader_tab(self, index: int) -> None:
         self._set_tab_label(index)
-        form = self._shader_forms[index - 1]
-        _clear_container(form)
-        header = GafferUI.ListContainer(
-            GafferUI.ListContainer.Orientation.Horizontal, spacing=6
-        )
-        header.append(GafferUI.Label("<b>{}</b>".format(self._slot_tab_name(index))))
-        header.append(GafferUI.Spacer(imath.V2i(8, 1)), expand=True)
-        presets = GafferUI.MenuButton(
-            "Presets",
-            menu=GafferUI.Menu(
-                functools.partial(self._presetMenuDefinition, index)
-            ),
-        )
-        try:
-            presets.setToolTip(
-                "Apply, save, or browse YAML presets for this shader."
-            )
-        except Exception:
-            pass
-        header.append(presets)
-        form.append(header)
-        self._addRow(
-            form,
-            "Preset Folder",
-            native_widget(self._node["presetFolder"]),
-            name="presetFolder{}".format(index),
-        )
-        form.append(GafferUI.Label("Material"))
-        for plug in self._node.parameterPlugs(index):
-            self._add_shader_param_row(form, plug)
-        form.append(GafferUI.Label("<b>Displacement</b>"))
-        try:
-            self._addRow(
-                form,
-                "Map",
-                native_widget(self._node[displacement_type_plug(index)]),
-            )
-        except Exception:
-            pass
-        disp_name = ""
-        try:
-            disp_name = (
-                self._node[displacement_type_plug(index)].getValue() or ""
-            ).strip()
-        except Exception:
-            disp_name = ""
-        if disp_name:
-            for plug in self._node.displacementParameterPlugs(index):
-                self._add_shader_param_row(form, plug)
+        self._refresh_shader_manager()
         self.__filled_shader.add(index)
 
     def _add_shader_param_row(self, form: GafferUI.ListContainer, plug) -> None:
@@ -2880,17 +2763,17 @@ _plugs = {
         "nodule:type": "",
     },
     "samplingEngine": {
-        "description": "Render Engine for this ShadingTk node (Arnold, "
-        "Cycles, or RenderMan). Set in Settings. Sampling uses this "
-        "choice; it is not asked again inside the Sampling tab.",
+        "description": "Renderer for this ShadingTk node (Arnold, "
+        "Cycles, or RenderMan). The menu sits in the header, between "
+        "the title and Copy. Sampling uses this choice.",
         "nodule:type": "",
-        "label": "Render Engine",
+        "label": "",
     },
     "mode": {
-        "description": "Create assigns new shaders (Main, Shaders, Textures, "
-        "Settings). MixShader sits next to Shader slots on Main; shader tabs are "
-        "under Shaders. Edit shows Edit Shader, Edit Binding, and Settings "
-        "(plus Sampling) and does not build those tabs until this mode is chosen.",
+        "description": "Create assigns new shaders (Main and Settings). "
+        "ShadingTk Manager sits under the header, then Mode. "
+        "Edit shows Edit Shader, Edit Binding, and "
+        "Settings (plus Sampling).",
         "nodule:type": "",
         "plugValueWidget:type": "GafferUI.PresetsPlugValueWidget",
         "preset:Create": MODE_CREATE,
