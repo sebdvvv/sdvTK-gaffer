@@ -36,7 +36,7 @@ Windows: use `;` instead of `:`. Farm / `gaffer execute` needs the same variable
 
 Restart Gaffer. The four nodes appear in the menus above.
 
-If the old `arnoldLight-gaffer`, `shadingTk-gaffer`, `arnoldPhysicalSky-gaffer`, or `renderConfig-gaffer` paths are still on `PYTHONPATH` or `GAFFER_STARTUP_PATHS`, remove them so only this toolkit is loaded.
+
 
 ```
 python/sdvTkGaffer/      node implementations
