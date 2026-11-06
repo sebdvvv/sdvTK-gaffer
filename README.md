@@ -34,7 +34,11 @@ export GAFFER_STARTUP_PATHS="/path/to/sdvTK-gaffer/startup:${GAFFER_STARTUP_PATH
 
 Windows: use `;` instead of `:`. Farm / `gaffer execute` needs the same variables.
 
-Restart Gaffer. The four nodes appear in the menus above.
+Restart Gaffer. The four nodes appear in the menus above. The menu bar gains **sdvTk**, with **Options**, **Texture Manager**, and **About**.
+
+Arnold Viewer settings ship in `startup/gui/arnoldViewerSettings.gfr`. Shading, Lighting, and Textures default to **Full** (the viewport settings menu, top left). That registration runs after Gaffer's own viewer startup.
+
+**Options** are stored in `~/gaffer/sdvtk_prefs.json`. They cover graph double-click, the graph navigation menu, Hierarchy browse-without-render, and the Python Editor swap. The swap is off until you check it. Set the [pw_MultiScriptEditor](https://github.com/sebdvvv/pw_MultiScriptEditor) folder in that same dialog (the folder that contains `multi_script_editor`, or the package folder itself). That path is saved with the other preferences. On the next launch, startup adds it to `PYTHONPATH` and uses the package as the Python Editor, docked under the Graph Editor. If that import fails, Gaffer's Python Editor stays.
 
 If the old `arnoldLight-gaffer`, `shadingTk-gaffer`, `arnoldPhysicalSky-gaffer`, or `renderConfig-gaffer` paths are still on `PYTHONPATH` or `GAFFER_STARTUP_PATHS`, remove them so only this toolkit is loaded.
 
@@ -168,7 +172,9 @@ Copy / Paste / Reset on the card header move values between ShadingTk nodes.
 
 A single node for render settings and primitive attributes related to rendering. Tweak them globally on the renderer, or locally on prims, instead of wiring a stack of Options and Attributes nodes. One node covers Arnold, RenderMan, and Cycles.
 
-**Renderer** is always visible. A new node defaults to Arnold when Arnold is installed, otherwise RenderMan, otherwise Cycles. A node already saved in a scene keeps its stored engine. Switching engine disables every internal Options and Attributes node that is not for that engine, so unused renderers do not run.
+**Renderer** is always visible. Under it, **Enable Subdivision** and **Enable Displacement** drive the same toggles in the Viewer Arnold settings menu (the viewport menu that also sets Shading / Lighting / Textures to Full). While an `sdvRenderSettings` node is in the script, those viewport toggles follow the checkboxes. If several nodes exist, the last one wins. Deleting the last one restores the viewport defaults.
+
+A new node defaults to Arnold when Arnold is installed, otherwise RenderMan, otherwise Cycles. A node already saved in a scene keeps its stored engine. Switching engine disables every internal Options and Attributes node that is not for that engine, so unused renderers do not run.
 
 | Tab | What it is |
 | --- | --- |

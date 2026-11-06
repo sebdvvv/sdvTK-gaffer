@@ -1,4 +1,4 @@
-"""Snapshot tree of ShadingTk textures: TxLibrary + shader:input connections."""
+"""Texture Manager tree: each texture, then the shaders that use it, then those inputs."""
 
 from __future__ import annotations
 
@@ -51,9 +51,9 @@ class TextureManagerWindow(GafferUI.Window):
             GafferUI.ListContainer.Orientation.Horizontal, spacing=6
         )
         self.__hint = GafferUI.Label(
-            "TxLibrary holds textures stored on this node, plus any fed "
-            "from upstream ShadingTk nodes. Select a texture to edit "
-            "its attributes on the right. Drops stay on this node."
+            "Textures first. Shaders that use a texture sit under it, "
+            "collapsed, with the connected inputs inside. Select a texture "
+            "to edit its attributes on the right."
         )
         header.append(self.__hint, expand=True)
         expand_btn = GafferUI.Button("Expand")
@@ -204,6 +204,19 @@ class TextureManagerWindow(GafferUI.Window):
 
     def node(self):
         return self.__node
+
+    def showTexture(self, name: str) -> None:
+        """Select a library texture and show its node attributes."""
+        name = (name or "").strip()
+        if not name:
+            return
+        self.__selected = {"kind": "texture", "name": name}
+        self.refresh()
+        try:
+            self.setVisible(True)
+            self.reveal()
+        except Exception:
+            pass
 
     def refresh(self, *unused) -> None:
         try:
@@ -378,106 +391,104 @@ class TextureManagerWindow(GafferUI.Window):
         )
 
     def __rebuildTree(self) -> None:
+        """Textures at the top. Shaders that use each texture are children, collapsed."""
         QtCore, QtGui, QtWidgets = _qt()
         role = QtCore.Qt.UserRole
         tree = self.__tree
         tree.clear()
-        library_root = QtWidgets.QTreeWidgetItem(["TxLibrary", "", "This node + upstream"])
-        library_root.setData(0, role, {"kind": "library"})
-        tree.addTopLevelItem(library_root)
+
+        library = {}
+        order: list[str] = []
         for item in self.__snapshot.get("library") or []:
-            source = "this node" if item.get("local") else (
-                item.get("sourceNode") or "upstream"
+            name = item.get("name") or ""
+            if not name or name in library:
+                continue
+            library[name] = item
+            order.append(name)
+
+        usage: dict[str, list] = {name: [] for name in order}
+        for shader in self.__snapshot.get("shaders") or []:
+            by_texture: dict[str, list] = {}
+            for connection in shader.get("connections") or []:
+                name = connection.get("texture") or ""
+                if not name:
+                    continue
+                by_texture.setdefault(name, []).append(connection)
+                if name not in usage:
+                    usage[name] = []
+                    order.append(name)
+            for name, connections in by_texture.items():
+                usage[name].append((shader, connections))
+
+        for name in order:
+            lib = library.get(name) or {}
+            path = lib.get("path") or ""
+            if not path:
+                for _shader, connections in usage.get(name) or []:
+                    path = next(
+                        (item.get("path") or "" for item in connections if item.get("path")),
+                        "",
+                    )
+                    if path:
+                        break
+            if lib:
+                source = "this node" if lib.get("local") else (
+                    lib.get("sourceNode") or "upstream"
+                )
+            else:
+                source = "connected"
+            texture_item = QtWidgets.QTreeWidgetItem(
+                [name, os.path.basename(path) if path else "", source]
             )
-            child = QtWidgets.QTreeWidgetItem(
-                [
-                    item.get("name") or "",
-                    os.path.basename(item.get("path") or ""),
-                    source,
-                ]
-            )
-            child.setData(
+            texture_item.setData(
                 0,
                 role,
                 {
                     "kind": "texture",
-                    "name": item.get("name") or "",
-                    "path": item.get("path") or "",
-                    "local": bool(item.get("local")),
-                    "sourceNode": item.get("sourceNode") or "",
+                    "name": name,
+                    "path": path,
+                    "local": bool(lib.get("local")),
+                    "sourceNode": lib.get("sourceNode") or "",
                 },
             )
-            child.setIcon(0, self.__previewIcon(item.get("path") or ""))
-            child.setToolTip(0, item.get("path") or "")
-            library_root.addChild(child)
+            texture_item.setIcon(0, self.__previewIcon(path))
+            texture_item.setToolTip(0, path)
+            tree.addTopLevelItem(texture_item)
 
-        for shader in self.__snapshot.get("shaders") or []:
-            title = shader.get("name") or shader.get("key") or "shader"
-            shader_item = QtWidgets.QTreeWidgetItem(
-                [title, shader.get("type") or "", "shader"]
-            )
-            shader_item.setData(
-                0,
-                role,
-                {
-                    "kind": "shader",
-                    "key": shader.get("key") or "",
-                    "name": title,
-                },
-            )
-            tree.addTopLevelItem(shader_item)
-            grouped: dict[str, list] = {}
-            order: list[str] = []
-            for connection in shader.get("connections") or []:
-                label = connection.get("label") or connection.get("plug") or ""
-                if label not in grouped:
-                    grouped[label] = []
-                    order.append(label)
-                grouped[label].append(connection)
-            for label in order:
-                connections = grouped[label]
-                input_item = QtWidgets.QTreeWidgetItem([label, "", "input"])
-                spec = connections[0]
-                input_item.setData(
+            for shader, connections in usage.get(name) or []:
+                title = shader.get("name") or shader.get("key") or "shader"
+                shader_item = QtWidgets.QTreeWidgetItem(
+                    [title, shader.get("type") or "", "shader"]
+                )
+                shader_item.setData(
                     0,
                     role,
                     {
-                        "kind": "input",
+                        "kind": "shader",
                         "key": shader.get("key") or "",
-                        "plug": spec.get("plug") or "",
-                        "component": spec.get("component") or "",
-                        "label": label,
+                        "name": title,
                     },
                 )
-                shader_item.addChild(input_item)
+                texture_item.addChild(shader_item)
                 for connection in connections:
-                    name = connection.get("texture") or ""
-                    if not name:
-                        continue
-                    tex = QtWidgets.QTreeWidgetItem(
-                        [
-                            name,
-                            os.path.basename(connection.get("path") or ""),
-                            "connected",
-                        ]
-                    )
-                    tex.setData(
+                    label = connection.get("label") or connection.get("plug") or "input"
+                    input_item = QtWidgets.QTreeWidgetItem([label, "", "input"])
+                    input_item.setData(
                         0,
                         role,
                         {
-                            "kind": "connection",
+                            "kind": "input",
                             "name": name,
-                            "path": connection.get("path") or "",
+                            "path": connection.get("path") or path,
                             "key": shader.get("key") or "",
                             "plug": connection.get("plug") or "",
                             "component": connection.get("component") or "",
-                            "label": connection.get("label") or "",
-                            "local": True,
+                            "label": label,
                         },
                     )
-                    tex.setIcon(0, self.__previewIcon(connection.get("path") or ""))
-                    input_item.addChild(tex)
-        tree.expandAll()
+                    shader_item.addChild(input_item)
+                shader_item.setExpanded(False)
+            texture_item.setExpanded(True)
 
     def __previewIcon(self, path: str):
         QtCore, QtGui, QtWidgets = _qt()

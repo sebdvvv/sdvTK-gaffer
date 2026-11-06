@@ -2022,6 +2022,280 @@ class ShadingTk(SceneInsertMixin, Gaffer.Box):
                     plugs.append(displacement[name])
         return plugs
 
+    def plugAcceptsRgbTexture(self, plug) -> bool:
+        if plug is None:
+            return False
+        type_name = type(plug).__name__
+        return "Color3f" in type_name or "Color4f" in type_name
+
+    def textureSourceNode(self, plug):
+        """Texture shader feeding this plug, or one of its components."""
+        if plug is None:
+            return None
+        try:
+            source = plug.getInput()
+        except Exception:
+            source = None
+        if source is not None:
+            try:
+                node = source.node()
+            except Exception:
+                node = None
+            if self._is_texture_node(node):
+                return node
+        try:
+            children = list(plug.children())
+        except Exception:
+            children = []
+        for child in children:
+            node = self.textureSourceNode(child)
+            if node is not None:
+                return node
+        return None
+
+    def texturePlugState(self, plug) -> str:
+        """``none``, ``connected``, or ``missing`` for an RGB attribute."""
+        node = self.textureSourceNode(plug)
+        if node is None:
+            return "none"
+        path = None
+        try:
+            if "parameters" in node and "filename" in node["parameters"]:
+                path = node["parameters"]["filename"].getValue() or ""
+        except Exception:
+            path = None
+        if path is None:
+            return "connected"
+        if self._texture_file_missing(path):
+            return "missing"
+        return "connected"
+
+    def textureNodeHasFile(self, node) -> bool:
+        try:
+            return node is not None and "parameters" in node and "filename" in node["parameters"]
+        except Exception:
+            return False
+
+    def texturePlugChoices(self) -> list[tuple[str, str]]:
+        """Shader types, then library file textures, for the TXT picker."""
+        choices = list(list_texture_shaders())
+        for item in self.libraryTextures():
+            name = item.get("name") or ""
+            if name:
+                choices.append((LIBRARY_PREFIX + name, name))
+        return choices
+
+    def assignPlugTexture(self, plug, choice: str):
+        """Connect a texture type or library texture to an RGB plug.
+
+        An empty choice disconnects it. Returns the texture node, or None.
+        """
+        if not self.plugAcceptsRgbTexture(plug):
+            return None
+        choice = (choice or "").strip()
+        if not choice:
+            self._release_plug_texture(plug)
+            self._sync_color_texture_type(plug, "")
+            return None
+        if choice.startswith(LIBRARY_PREFIX):
+            node = self.textureNodeByName(choice[len(LIBRARY_PREFIX) :])
+            if node is None:
+                return None
+        else:
+            node = self._ensure_typed_texture(plug, choice)
+            if node is None:
+                return None
+        self._release_plug_texture(plug, keep=node)
+        if not self._connect_texture_output(plug, node, ""):
+            return None
+        try:
+            key = LIBRARY_PREFIX + (node.getName() or "")
+        except Exception:
+            key = ""
+        if key:
+            self._sync_color_texture_type(plug, key)
+        self.refresh_map_presets()
+        return node
+
+    def _texture_file_missing(self, path: str) -> bool:
+        path = (path or "").strip()
+        if not path:
+            return True
+        if "<" in path or "#" in path or "$" in path:
+            return False
+        return not os.path.isfile(path)
+
+    def _node_in_textures_box(self, node) -> bool:
+        box = self.texturesBox()
+        if node is None or box is None:
+            return False
+        try:
+            parent = node.parent()
+        except Exception:
+            return False
+        try:
+            return parent is not None and parent.isSame(box)
+        except Exception:
+            return False
+
+    def _texture_output_destinations(self, node) -> list:
+        found = []
+        if node is None or "out" not in node:
+            return found
+
+        def walk(plug) -> None:
+            try:
+                found.extend(list(plug.outputs()))
+            except Exception:
+                pass
+            try:
+                children = list(plug.children())
+            except Exception:
+                children = []
+            for child in children:
+                walk(child)
+
+        walk(node["out"])
+        return found
+
+    def _destination_under(self, dest, ancestor) -> bool:
+        current = dest
+        while current is not None:
+            try:
+                if current.isSame(ancestor):
+                    return True
+            except Exception:
+                return False
+            try:
+                current = current.parent()
+            except Exception:
+                return False
+        return False
+
+    def _clear_texture_inputs(self, plug) -> None:
+        if plug is None:
+            return
+        try:
+            source = plug.getInput()
+        except Exception:
+            source = None
+        if source is not None and self._is_texture_node(getattr(source, "node", lambda: None)()):
+            try:
+                plug.setInput(None)
+            except Exception:
+                pass
+        try:
+            children = list(plug.children())
+        except Exception:
+            children = []
+        for child in children:
+            self._clear_texture_inputs(child)
+
+    def _release_plug_texture(self, plug, keep=None) -> None:
+        node = self.textureSourceNode(plug)
+        if node is None:
+            return
+        if keep is not None:
+            try:
+                if node.isSame(keep):
+                    return
+            except Exception:
+                pass
+        self._clear_texture_inputs(plug)
+        if not self._node_in_textures_box(node):
+            return
+        elsewhere = False
+        for dest in self._texture_output_destinations(node):
+            if not self._destination_under(dest, plug):
+                elsewhere = True
+                break
+        if elsewhere:
+            return
+        try:
+            self.removeLibraryTexture(node.getName())
+        except Exception:
+            pass
+
+    def _ensure_typed_texture(self, plug, shader_type: str):
+        current = self.textureSourceNode(plug)
+        if (
+            current is not None
+            and self._node_in_textures_box(current)
+            and not any(
+                not self._destination_under(dest, plug)
+                for dest in self._texture_output_destinations(current)
+            )
+        ):
+            current_type = ""
+            try:
+                if "name" in current:
+                    current_type = current["name"].getValue() or ""
+            except Exception:
+                current_type = ""
+            if current_type != shader_type:
+                try:
+                    current.loadShader(shader_type)
+                except Exception as exc:
+                    IECore.msg(
+                        IECore.Msg.Level.Warning,
+                        "ShadingTk",
+                        "Could not load texture {} ({})".format(shader_type, exc),
+                    )
+                    return None
+            return current
+        try:
+            import GafferArnold
+        except Exception as exc:
+            IECore.msg(
+                IECore.Msg.Level.Warning,
+                "ShadingTk",
+                "ShadingTk requires GafferArnold ({})".format(exc),
+            )
+            return None
+        box = self._ensure_textures_box()
+        stem = shader_handle_name(plug.getName() or "tex", 1)
+        if stem == slot_label(1):
+            stem = "tex"
+        existing = {child.getName() for child in box.children()}
+        name = stem
+        suffix = 1
+        while name in existing:
+            suffix += 1
+            name = "{}{}".format(stem, suffix)
+        shader = GafferArnold.ArnoldShader(name)
+        try:
+            shader.loadShader(shader_type)
+        except Exception as exc:
+            IECore.msg(
+                IECore.Msg.Level.Warning,
+                "ShadingTk",
+                "Could not load texture {} ({})".format(shader_type, exc),
+            )
+            return None
+        box.addChild(shader)
+        return shader
+
+    def _sync_color_texture_type(self, plug, value: str) -> None:
+        for index in range(1, MAX_SLOTS + 1):
+            color = self.colorParameter(index)
+            if color is None:
+                continue
+            try:
+                same = color.isSame(plug)
+            except Exception:
+                same = False
+            if not same:
+                continue
+            plug_name = texture_type_plug(index)
+            if plug_name not in self:
+                return
+            try:
+                if (self[plug_name].getValue() or "") != (value or ""):
+                    self[plug_name].setValue(value or "")
+            except Exception:
+                pass
+            return
+
     def plugHasTextureInput(self, plug) -> bool:
         if plug is None:
             return False
@@ -3004,7 +3278,7 @@ class ShadingTk(SceneInsertMixin, Gaffer.Box):
         if texture is None:
             return
         tex_name = (self[texture_type_plug(index)].getValue() or "").strip()
-        if not tex_name:
+        if not tex_name or tex_name.startswith(LIBRARY_PREFIX):
             self._connect_texture(index)
             return
         try:
@@ -3147,13 +3421,28 @@ class ShadingTk(SceneInsertMixin, Gaffer.Box):
             return
         tex_name = (self[texture_type_plug(index)].getValue() or "").strip()
         source = self._map_source_shader(tex_name, self.slotTexture(index))
-        if not tex_name or source is None:
+        current_node = None
+        try:
+            current = color.getInput()
+            current_node = current.node() if current is not None else None
+        except Exception:
+            current_node = None
+        slot_tex = self.slotTexture(index)
+        driven_here = False
+        if current_node is not None:
             try:
-                current = color.getInput()
-                if current is not None:
-                    color.setInput(None)
+                if slot_tex is not None and current_node.isSame(slot_tex):
+                    driven_here = True
+                elif source is not None and current_node.isSame(source):
+                    driven_here = True
             except Exception:
-                pass
+                driven_here = False
+        if not tex_name or source is None:
+            if driven_here:
+                try:
+                    color.setInput(None)
+                except Exception:
+                    pass
             return
         self._connect_shader_output(color, source)
 

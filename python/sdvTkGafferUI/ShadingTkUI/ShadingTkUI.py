@@ -1246,8 +1246,9 @@ class _ShadingTkWidget(CardNodeWidget):
             GafferUI.Label(
                 "Textures dropped here are stored on this ShadingTk. "
                 "Open the Texture Manager to connect them and edit "
-                "texture node attributes in the right pane. Shader "
-                "tabs only mark inputs that have textures."
+                "texture node attributes in the right pane. RGB shader "
+                "attributes have a TXT button: grey with no texture, "
+                "green when one is connected, red when that file is missing."
             )
         )
         open_btn = GafferUI.Button("Open Texture Manager")
@@ -1990,7 +1991,8 @@ class _ShadingTkWidget(CardNodeWidget):
                     row.append(native_widget(tweak["enabled"]))
                 row.append(widget, expand=True)
                 widget = row
-            self._addRow(form, _tweak_label(tweak), widget, text_label=True)
+            row = self._addRow(form, _tweak_label(tweak), widget, text_label=True)
+            self._attach_txt_button(row, value)
         self._edit_params_key = key
 
     def _syncSamplingControls(self) -> None:
@@ -2274,12 +2276,236 @@ class _ShadingTkWidget(CardNodeWidget):
         if widget is None:
             return
         label, marked = _shader_param_label(self._node, plug)
-        self._addRow(
+        row = self._addRow(
             form,
             label,
             widget,
             text_label=marked,
         )
+        self._attach_txt_button(row, plug)
+
+    def _attach_txt_button(self, row, plug) -> None:
+        try:
+            accepts = self._node.plugAcceptsRgbTexture(plug)
+        except Exception:
+            accepts = False
+        if not accepts or row is None:
+            return
+        button = GafferUI.Button("TXT")
+        try:
+            button._qtWidget().setFixedWidth(46)
+        except Exception:
+            pass
+        self._style_txt_button(button, plug)
+        self._buttonConnections.append(
+            button.clickedSignal().connect(
+                functools.partial(Gaffer.WeakMethod(self.__onTxt), plug),
+                scoped=True,
+            )
+        )
+        row.append(button)
+        buttons = getattr(self, "_txt_buttons", None)
+        if buttons is None:
+            buttons = []
+            self._txt_buttons = buttons
+        buttons.append((button, plug))
+        source = None
+        try:
+            source = self._node.textureSourceNode(plug)
+        except Exception:
+            source = None
+        if source is None:
+            return
+        watched = getattr(self, "_txt_watched", None)
+        if watched is None:
+            watched = set()
+            self._txt_watched = watched
+        if id(source) in watched:
+            return
+        watched.add(id(source))
+        try:
+            self._buttonConnections.append(
+                source.plugSetSignal().connect(
+                    Gaffer.WeakMethod(self.__onTexturePlugSet), scoped=True
+                )
+            )
+        except Exception:
+            pass
+
+    def _style_txt_button(self, button, plug) -> None:
+        state = "none"
+        path = ""
+        node_name = ""
+        try:
+            state = self._node.texturePlugState(plug)
+        except Exception:
+            state = "none"
+        source = None
+        try:
+            source = self._node.textureSourceNode(plug)
+        except Exception:
+            source = None
+        if source is not None:
+            try:
+                node_name = source.getName() or ""
+            except Exception:
+                node_name = ""
+            try:
+                if "parameters" in source and "filename" in source["parameters"]:
+                    path = source["parameters"]["filename"].getValue() or ""
+            except Exception:
+                path = ""
+        colors = {
+            "none": ("#5e5e5e", "#e6e6e6"),
+            "connected": ("#2e7d32", "#ffffff"),
+            "missing": ("#c62828", "#ffffff"),
+        }
+        background, foreground = colors.get(state, colors["none"])
+        try:
+            button._qtWidget().setStyleSheet(
+                "QPushButton {{ background-color: {}; color: {}; "
+                "border: 1px solid #222222; border-radius: 2px; "
+                "font-weight: bold; padding: 1px 4px; }}".format(
+                    background, foreground
+                )
+            )
+        except Exception:
+            pass
+        if state == "none":
+            tip = "Choose a texture or a file texture for this colour."
+        elif state == "missing":
+            tip = "Texture file is missing ({}). Opens the texture node.".format(
+                path or node_name or "empty path"
+            )
+        else:
+            tip = "Opens {}.".format(node_name or "the texture node")
+            if path:
+                tip = "Opens {} ({})".format(node_name or "texture", path)
+        try:
+            button.setToolTip(tip)
+        except Exception:
+            pass
+
+    def __onTexturePlugSet(self, plug, *unused) -> None:
+        if plug is None or plug.getName() != "filename":
+            return
+        self.__refreshTxtButtons()
+
+    def __refreshTxtButtons(self) -> None:
+        live = []
+        for button, plug in getattr(self, "_txt_buttons", []) or []:
+            if not widget_is_alive(button):
+                continue
+            live.append((button, plug))
+            self._style_txt_button(button, plug)
+        self._txt_buttons = live
+
+    def __onTxt(self, plug, *unused) -> None:
+        state = "none"
+        try:
+            state = self._node.texturePlugState(plug)
+        except Exception:
+            state = "none"
+        if state == "none":
+            self._choose_plug_texture(plug)
+        else:
+            source = None
+            try:
+                source = self._node.textureSourceNode(plug)
+            except Exception:
+                source = None
+            self._open_texture_panel(source)
+        self.__refreshTxtButtons()
+
+    def _choose_plug_texture(self, plug) -> None:
+        from Qt.QtWidgets import QComboBox, QDialog, QVBoxLayout
+
+        dialog = QDialog(self._qtWidget().window())
+        dialog.setWindowTitle("Texture")
+        dialog.setModal(True)
+        layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(10, 10, 10, 10)
+        combo = QComboBox()
+        combo.addItem("None", "")
+        combo.addItem("File texture…", "__file__")
+        try:
+            choices = list(self._node.texturePlugChoices())
+        except Exception:
+            choices = []
+        for value, label in choices:
+            combo.addItem(label, value)
+        layout.addWidget(combo)
+        picked = {"value": None}
+
+        def _activate(index) -> None:
+            picked["value"] = combo.itemData(index)
+            dialog.accept()
+
+        combo.activated.connect(_activate)
+        dialog.setFixedWidth(280)
+        dialog.adjustSize()
+        runner = getattr(dialog, "exec", None) or dialog.exec_
+        if runner() != QDialog.Accepted:
+            return
+        value = picked["value"]
+        if value is None:
+            value = ""
+        value = str(value)
+        script = self._node.scriptNode()
+        node = None
+        if value == "__file__":
+            from Qt.QtWidgets import QFileDialog
+
+            chosen, _filter = QFileDialog.getOpenFileName(
+                dialog,
+                "File texture",
+                "",
+                "Images (*.exr *.tx *.tif *.tiff *.png *.jpg *.jpeg *.hdr *.tga);;All (*)",
+            )
+            if not chosen:
+                return
+            with Gaffer.UndoScope(script):
+                try:
+                    name = self._node.ingestLibraryTexture(chosen)
+                except Exception as exc:
+                    IECore.msg(IECore.Msg.Level.Warning, "ShadingTk", str(exc))
+                    return
+                node = self._node.assignPlugTexture(
+                    plug, "lib:" + name
+                )
+        else:
+            with Gaffer.UndoScope(script):
+                node = self._node.assignPlugTexture(plug, value)
+        if node is None:
+            return
+        try:
+            file_texture = self._node.textureNodeHasFile(node)
+        except Exception:
+            file_texture = False
+        if file_texture:
+            self._open_texture_panel(node)
+
+    def _open_texture_panel(self, node) -> None:
+        if node is None:
+            return
+        in_box = False
+        try:
+            in_box = self._node._node_in_textures_box(node)
+        except Exception:
+            in_box = False
+        if in_box:
+            self.__onOpenTextureManager()
+            window = getattr(self, "_texture_window", None)
+            if window is not None and widget_is_alive(window):
+                try:
+                    window.showTexture(node.getName())
+                except Exception:
+                    pass
+            return
+        try:
+            GafferUI.NodeEditor.acquire(node, floating=True)
+        except Exception:
+            pass
 
     def __onAddSlot(self, *unused) -> None:
         script = self._node.scriptNode()
@@ -2802,8 +3028,8 @@ for _index in range(1, MAX_SLOTS + 1):
         "nodule:type": "",
     }
     _plugs[texture_type_plug(_index)] = {
-        "description": "Legacy color-map type. Connect and edit textures "
-        "in the Texture Manager; shader tabs only show (has Textures).",
+        "description": "Legacy diffuse-map type kept for older scripts. "
+        "RGB attributes on the shader tab use the TXT button.",
         "nodule:type": "",
     }
     _plugs[displacement_type_plug(_index)] = {

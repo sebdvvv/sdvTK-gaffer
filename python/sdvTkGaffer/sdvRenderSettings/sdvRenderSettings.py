@@ -78,6 +78,30 @@ class sdvRenderSettings(SceneInsertMixin, Gaffer.Box):
         for value, label in ENGINE_LABELS.items():
             Gaffer.Metadata.registerValue(engine_plug, "preset:" + label, value)
 
+        for plug_name, label, text in (
+            (
+                "enableSubdivision",
+                "Enable Subdivision",
+                "Drives Enable Subdivision in the Viewer Arnold settings "
+                "menu (top-left of the viewport). While this node is in "
+                "the script, that viewport toggle follows this checkbox. "
+                "Deleting the node restores the viewport default.",
+            ),
+            (
+                "enableDisplacement",
+                "Enable Displacement",
+                "Drives Enable Displacement in the Viewer Arnold settings "
+                "menu. While this node is in the script, that viewport "
+                "toggle follows this checkbox. Deleting the node restores "
+                "the viewport default.",
+            ),
+        ):
+            plug = Gaffer.BoolPlug(plug_name, defaultValue=False)
+            self.addChild(plug)
+            Gaffer.Metadata.registerValue(plug, "nodule:type", "")
+            Gaffer.Metadata.registerValue(plug, "label", label)
+            Gaffer.Metadata.registerValue(plug, "description", text)
+
         for index in range(1, MAX_SLOTS + 1):
             self.__add_slot_plugs(index, engine)
 
@@ -100,6 +124,12 @@ class sdvRenderSettings(SceneInsertMixin, Gaffer.Box):
         self._bind_signals()
         self.__slotsReady = True
         self._sync_driven_plugs()
+        try:
+            from sdvTkGafferUI.viewerSync import watch
+
+            watch(self)
+        except Exception:
+            pass
 
     def __add_slot_plugs(self, index: int, engine: str) -> None:
         name_plug = Gaffer.StringPlug(
@@ -519,8 +549,10 @@ Gaffer.Metadata.registerNode(
     "description",
     "Standard options plus renderer options (Arnold / RenderMan / Cycles) "
     "and up to eight attribute sets, each with its own PathFilter. "
-    "Renderer drives Standard Options Default Renderer. Unused engine "
-    "nodes are disabled. Existing scenes keep the saved engine.",
+    "Enable Subdivision and Enable Displacement drive the matching "
+    "toggles in the Viewer Arnold settings menu, and revert when this "
+    "node is deleted. Renderer drives Standard Options Default Renderer. "
+    "Unused engine nodes are disabled. Existing scenes keep the saved engine.",
 )
 
 

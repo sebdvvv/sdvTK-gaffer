@@ -200,6 +200,38 @@ class _sdvRenderSettingsWidget(CardNodeWidget):
             GafferUI.PresetsPlugValueWidget(self._node["renderEngine"]),
             name="renderEngine",
         )
+        toggles = GafferUI.ListContainer(
+            GafferUI.ListContainer.Orientation.Horizontal, spacing=16
+        )
+        spacer = GafferUI.Label("")
+        try:
+            spacer._qtWidget().setFixedWidth(self._LABEL_W)
+        except Exception:
+            pass
+        toggles.append(spacer)
+        for plug_name, label in (
+            ("enableSubdivision", "Enable Subdivision"),
+            ("enableDisplacement", "Enable Displacement"),
+        ):
+            widget = GafferUI.BoolPlugValueWidget(self._node[plug_name])
+            try:
+                widget.boolWidget().setText(label)
+            except Exception:
+                toggles.append(GafferUI.Label(label))
+            try:
+                widget.setToolTip(
+                    Gaffer.Metadata.value(self._node[plug_name], "description") or ""
+                )
+            except Exception:
+                pass
+            toggles.append(widget)
+        card.append(toggles)
+        try:
+            from sdvTkGafferUI.viewerSync import sync_node
+
+            sync_node(self._node)
+        except Exception:
+            pass
 
         self._tabs = GafferUI.TabbedContainer()
         expand_h(self._tabs)

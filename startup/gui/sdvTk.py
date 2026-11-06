@@ -36,3 +36,17 @@ for _path, _cls, _search in (
     ("/Render/sdvRenderSettings", sdvRenderSettings, "sdvRenderSettings"),
 ):
     node_menu.append(path=_path, nodeCreator=_creator(_cls), searchText=_search)
+
+from sdvTkGafferUI import arnoldViewer  # noqa: E402
+from sdvTkGafferUI import hierarchyBrowse  # noqa: E402
+from sdvTkGafferUI import menu as sdv_menu  # noqa: E402
+from sdvTkGafferUI import scriptEditor  # noqa: E402
+from sdvTkGafferUI import uiTweaks  # noqa: E402
+from sdvTkGafferUI import viewerSync  # noqa: E402
+
+arnoldViewer.install(application)
+viewerSync.install(application)
+hierarchyBrowse.install(application)
+uiTweaks.install(application)
+scriptEditor.install(application)
+sdv_menu.install(application)
