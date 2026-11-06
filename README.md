@@ -2,7 +2,7 @@
 
 This is an open-source contribution to [Gaffer](https://github.com/GafferHQ/gaffer), for anyone who wants a quick, production-shaped Arnold lighting workflow instead of wiring stock nodes by hand. It is designed around production-standard requirements, including a single node that provides every element needed for natural sky lighting.
 
-One toolkit for lighting, shading, and render settings. Install this repo instead of the separate node packages.
+One toolkit for lighting, shading, and render settings. 
 
 <img width="856" height="333" alt="gaffer_2026-11-05_22-15-37" src="https://github.com/user-attachments/assets/1eb7f2e6-bf20-454e-b743-1b78dc23c4e7" />
 
@@ -40,7 +40,7 @@ Arnold Viewer settings ship in `startup/gui/arnoldViewerSettings.gfr`. Shading, 
 
 **Options** are stored in `~/gaffer/sdvtk_prefs.json`. They cover graph double-click, the graph navigation menu, Hierarchy browse-without-render, and the Python Editor swap. The swap is off until you check it. Set the [pw_MultiScriptEditor](https://github.com/sebdvvv/pw_MultiScriptEditor) folder in that same dialog (the folder that contains `multi_script_editor`, or the package folder itself). That path is saved with the other preferences. On the next launch, startup adds it to `PYTHONPATH` and uses the package as the Python Editor, docked under the Graph Editor. If that import fails, Gaffer's Python Editor stays.
 
-If the old `arnoldLight-gaffer`, `shadingTk-gaffer`, `arnoldPhysicalSky-gaffer`, or `renderConfig-gaffer` paths are still on `PYTHONPATH` or `GAFFER_STARTUP_PATHS`, remove them so only this toolkit is loaded.
+
 
 ```
 python/sdvTkGaffer/      node implementations
