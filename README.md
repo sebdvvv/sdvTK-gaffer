@@ -162,6 +162,8 @@ Needs Gaffer with Arnold, RenderMan, or Cycles. It starts empty. Add shader slot
 
 **ShadingTk Manager** sits on the node, directly under **Render Engine**, above the tabs. It is one window with a **Shaders** tab and a **Textures** tab. Shaders are listed in the order they connect, ending at a texture or at the shader itself. Select a shader to edit its attributes, including the TXT button on RGB colours. Textures are listed first. **Edit** on a shader slot opens that shader on the Shaders tab. The **sdvTk** menu items **Shader Manager** and **Texture Manager** open the same window on the matching tab.
 
+Still to implement: an easy UDIM toggle, and animated texture support. A texture path is a string today. Arnold and RenderMan resolve a `<UDIM>` token at render time; Gaffer's own image reader does not expand it.
+
 In Shader Manager, **Presets** loads or saves YAML looks. Built-in samples live in `presets/ShadingTk/`. Point **Preset Folder** at your own directory, or set `SHADINGTK_PRESET_PATH`.
 
 Copy / Paste / Reset on the card header move values between ShadingTk nodes.
