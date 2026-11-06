@@ -8,7 +8,7 @@ One toolkit for lighting, shading, and render settings. Install this repo instea
 
 `ShadingTk` and `sdvRenderSettings` support Arnold, RenderMan, and Cycles. 
 
-| Node | What it is | Node menu |
+| Node |  | Node menu |
 | --- | --- | --- |
 | `ArnoldLight` | One node for any Arnold light (area, spot, mesh, …) | **Arnold → ArnoldLight** |
 | `ArnoldPhysicalSky` | Natural sky: physical sky, HDRI, or a flat colour dome | **Arnold → ArnoldPhysicalSky** |
@@ -25,29 +25,29 @@ Tested on **Gaffer 1.7.5** and **Arnold 1.7.5.4**.
 
 ## Install
 
-Set two variables to this repo:
+Set two variables to this repo.
+
+Linux:
 
 ```bash
 export PYTHONPATH="/path/to/sdvTK-gaffer/python:${PYTHONPATH}"
 export GAFFER_STARTUP_PATHS="/path/to/sdvTK-gaffer/startup:${GAFFER_STARTUP_PATHS}"
 ```
 
-Windows: use `;` instead of `:`. Farm / `gaffer execute` needs the same variables.
+Windows:
 
-Arnold Viewer settings ship in `startup/gui/arnoldViewerSettings.gfr`. Shading, Lighting, and Textures default to **Full** (the viewport settings menu, top left). That registration runs after Gaffer's own viewer startup.
+```bat
+set PYTHONPATH=C:\path\to\sdvTK-gaffer\python;%PYTHONPATH%
+set GAFFER_STARTUP_PATHS=C:\path\to\sdvTK-gaffer\startup;%GAFFER_STARTUP_PATHS%
+```
 
-```
-python/sdvTkGaffer/      node implementations
-python/sdvTkGafferUI/    Node Editor cards
-startup/gui/sdvTk.py     registers every node
-presets/ShadingTk/
-presets/sdvRenderSettings/
-icons/
-```
+Arnold Viewer settings set at startup to Shading, Lighting, and Textures to **Full**.
 
 ---
 
 ## Gaffer UI & interaction Mods
+
+Middle-click closes a layout tab (Graph Editor, Viewer, and the other editors).
 
 **sdvTk → Options** saves preferences in `~/gaffer/sdvtk_prefs.json`.
 
@@ -72,7 +72,7 @@ A single Gaffer node wrapping any Arnold light type, with input and output ports
 
 ### Tabs
 
-| Tab | What it is |
+| Tab |  |
 | --- | --- |
 | **Light** | Type, name, viewer drawing, and the everyday look (colour, exposure, …). Fields change with the type. |
 | **Shaping** | Beam and shape controls that exist on the current type (cone, penumbra, spread, roundness, …). |
@@ -129,7 +129,7 @@ Single node providing all required elements for natural sky lighting. It adds on
 
 **Split Camera / Lighting** (when this Arnold build has `ray_switch`) locks Env Light Type and feeds camera rays and lighting rays from different sources. Dome intensity, exposure, and transform still apply to both. Turning Split off returns to Env Light Type. Each side can be Physical Sky, HDRI, or Color, with its own exposure and colour grade.
 
-| Tab | What it is |
+| Tab |  |
 | --- | --- |
 | **Light** | Env Light Type, Split, label, prim name, and the sky shader (sun, turbidity, HDRI file, colour, …). |
 | **Transform** | Place and rotate the dome. |
@@ -151,7 +151,7 @@ ShadingTk is a single-node toolkit for using all Gaffer shading capabilities. It
 
 **Edit** loads an existing surface shader. It does not replace or rename that shader.
 
-| Tab | When | What it is |
+| Tab | When |  |
 | --- | --- | --- |
 | **Main** | Create | Nested tabs: **Globals**, **Shader slots** (**Add Shader slot**, then **Remove** on a slot), and **MixShader**. |
 | **Edit Shader** | Edit | Tweak one existing surface shader. The node creates an EditScope after the incoming assignment and writes parameter edits there. Pick a shader; parameters load in this tab. |
@@ -165,13 +165,18 @@ In Shader Manager, **Presets** loads or saves YAML looks. Built-in samples live 
 
 Copy / Paste / Reset on the card header move values between ShadingTk nodes.
 
+### Still to implement
+
+- Automated UDIM setup/recognition/toggle
+- Animated texture support
+
 ---
 
 ## sdvRenderSettings
 
 Single node for render settings and primitive attributes related to rendering. Tweak them globally on the renderer, or locally on prims, instead of wiring a stack of Options and Attributes nodes. One node covers Arnold, RenderMan, and Cycles.
 
-| Tab | What it is |
+| Tab |  |
 | --- | --- |
 | **Standard Options** | Gaffer’s standard render options, including the default renderer. |
 | **{Engine} Options** | Native `ArnoldOptions`, `RenderManOptions`, or `CyclesOptions`. Preset menu, Save, and Load. |
@@ -179,7 +184,7 @@ Single node for render settings and primitive attributes related to rendering. T
 
 Each set adds a tab named after it (default `ArnoldAttributesSet1`, and the same pattern for the other engines). That tab shows the native attributes plugs.
 
-| Control | What it does |
+| Control |  |
 | --- | --- |
 | **Attribute Set** | Name of the set. Renames the tab. |
 | **Prim Path** | Locations that receive these attributes. Scene picker. Gaffer expressions work. |
@@ -201,10 +206,3 @@ Shipped samples: Arnold Preview, Draft, and Production; RenderMan Draft and Prod
 Save writes `{Engine}_{Name}.yaml`. Load can pick any YAML file. Applying a preset for another engine switches the engine, then loads options and any attribute sets stored in the file.
 
 Copy / Paste / Reset on the card header copies the engine, options, and attribute sets onto another `sdvRenderSettings`. Reset restores option and attribute defaults and keeps the engine.
-
----
-
-## Still to implement
-
-- Automated UDIM setup/recognition/toggle
-- Animated texture support
