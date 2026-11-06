@@ -185,7 +185,8 @@ def _about_html() -> str:
     return """
 <html><body style="color:#dfdfdf; font-family:'Segoe UI',Arial,sans-serif; font-size:10pt;">
 <p style="margin:0 0 6px 0; font-size:14pt;"><b>sdvTk</b></p>
-<p style="margin:0 0 10px 0;">Author license: MIT</p>
+<p style="margin:0 0 10px 0;">Author name: Sébastien Durand</p>
+<p style="margin:0 0 10px 0;">License: MIT</p>
 <p style="margin:0 0 10px 0;">
   <a href="https://github.com/sebdvvv/sdvTK-gaffer" style="color:#ffaa00;">https://github.com/sebdvvv/sdvTK-gaffer</a>
 </p>

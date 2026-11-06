@@ -34,13 +34,7 @@ export GAFFER_STARTUP_PATHS="/path/to/sdvTK-gaffer/startup:${GAFFER_STARTUP_PATH
 
 Windows: use `;` instead of `:`. Farm / `gaffer execute` needs the same variables.
 
-Restart Gaffer. The four nodes appear in the menus above. The menu bar gains **sdvTk**, with **Options**, **Shader Manager**, **Texture Manager**, and **About**.
-
 Arnold Viewer settings ship in `startup/gui/arnoldViewerSettings.gfr`. Shading, Lighting, and Textures default to **Full** (the viewport settings menu, top left). That registration runs after Gaffer's own viewer startup.
-
-**Options** are stored in `~/gaffer/sdvtk_prefs.json`. They cover graph double-click, the graph navigation menu, Hierarchy browse-without-render, and the Python Editor swap. The swap is off until you check it. Set the [pw_MultiScriptEditor](https://github.com/sebdvvv/pw_MultiScriptEditor) folder in that same dialog (the folder that contains `multi_script_editor`, or the package folder itself). That path is saved with the other preferences. On the next launch, startup adds it to `PYTHONPATH` and uses the package as the Python Editor, docked under the Graph Editor. If that import fails, Gaffer's Python Editor stays.
-
-If the old `arnoldLight-gaffer`, `shadingTk-gaffer`, `arnoldPhysicalSky-gaffer`, or `renderConfig-gaffer` paths are still on `PYTHONPATH` or `GAFFER_STARTUP_PATHS`, remove them so only this toolkit is loaded.
 
 ```
 python/sdvTkGaffer/      node implementations
@@ -53,17 +47,28 @@ icons/
 
 ---
 
+## Gaffer UI & interaction Mods
+
+**sdvTk → Options** saves preferences in `~/gaffer/sdvtk_prefs.json`.
+
+- **Double-click enters content nodes** — double-click a Box, Reference, or EditScope to open its contents.
+- **Navigate node contents through a single pane** — that navigation stays in the current Graph Editor.
+- **Ctrl + Double-click opens Node editor panels** — Ctrl+double-click opens a Node Editor for the node.
+- **Graph View right-click menu has navigation** — the graph menu includes back (◀) and root (/).
+- **Scene Hierarchy: browse without retriggering the Viewer** — expand and collapse in the Hierarchy View while the Viewer keeps its Visible Set.
+- **Replace the Python Editor with [pw_MultiScriptEditor](https://github.com/sebdvvv/pw_MultiScriptEditor)** — set the folder that contains `multi_script_editor`. The next launch adds it to `PYTHONPATH` and docks that editor under the Graph Editor.
+
+---
+
 ## ArnoldLight
 
-A single Gaffer node wrapping any Arnold light type, with input and output ports. Drop it on a scene line, pick a type, set the look. This is not Gaffer’s stock `ArnoldLight`. Skydome, HDRI, and physical sky live on `ArnoldPhysicalSky`.
-
-Select the node. The Node Editor shows a card: **Mode**, then tabs. Copy / Paste / Reset sit on the card header. They copy the look (type, transform, GL drawing, shader values). They do not overwrite the destination name or path.
+A single Gaffer node wrapping any Arnold light type, with input and output ports. Drop it on a scene line, pick a type, set the look. Skydome, HDRI, and physical sky live on `ArnoldPhysicalSky`.
 
 ### Create and Edit
 
 **Create** (default) authors a new light.
 
-**Edit** picks an existing light from the incoming scene. The node loads its type, transform, and parameters and authors at the same name and path as that light. Prim Name, Label, and Prim Path are greyed — they follow the menu selection. The graph name gets an `_edit` suffix. Mesh Light does not prune the mesh.
+**Edit** picks an existing light from the incoming scene. The node loads its type, transform, and parameters and authors at the same name and path as that light. Prim Name, Label, and Prim Path are greyed — they follow the menu selection. The graph name gets an `_edit` suffix. Mesh Light keeps the mesh.
 
 ### Tabs
 
@@ -94,7 +99,7 @@ Change Label or Type and the prim name and graph node name follow. An empty Labe
 
 ### Mesh Light
 
-Mesh Light does not create a new light prim. It turns an existing mesh into a light.
+Mesh Light turns an existing mesh into a light.
 
 1. Light Type → **Mesh Light**.
 2. **Prim Path** appears on the Light tab (and on the Prim Path tab). Pick the mesh from the incoming scene, for example `/geo/lampShade`.
@@ -102,19 +107,17 @@ Mesh Light does not create a new light prim. It turns an existing mesh into a li
 
 Prim Path is the filter that chooses which prims emit. Type a path, pick from the scene browser, or put a Gaffer expression on Prim Path. Several meshes: separate paths with spaces.
 
-In Edit mode, picking an existing mesh light fills Prim Path with that full location. The mesh is not deleted. Transform, Label, and Prim Name hide — that is expected for this type.
+In Edit mode, picking an existing mesh light fills Prim Path with that full location.
 
 ### Light types
 
 Area (quad, the default), disk, cylinder, point, spot, distant, photometric, mesh.
 
-Still outside this node: barndoors, blockers, decay filters, and light linking. Light linking for a sky dome is on `ArnoldPhysicalSky`.
-
 ---
 
 ## ArnoldPhysicalSky
 
-A single node providing all required elements for natural sky lighting. It adds one Arnold environment light into the scene.
+Single node providing all required elements for natural sky lighting. It adds one Arnold environment light into the scene.
 
 - **Physical Sky** (default) — `physical_sky` drives the skydome colour
 - **HDRI** — an image shader drives colour
@@ -138,15 +141,11 @@ A single node providing all required elements for natural sky lighting. It adds 
 
 Copy / Paste / Reset on the card header copy the look onto another `ArnoldPhysicalSky`. They keep the destination name and path.
 
-Regular lights (area, spot, mesh, …) are `ArnoldLight`.
-
 ---
 
 ## ShadingTk
 
 ShadingTk is a single-node toolkit for using all Gaffer shading capabilities. It automates the usual material, shader, and texture tasks — assign looks, plug in maps, load presets, tweak an existing shader, override samples — without wiring a chain of stock nodes by hand.
-
-Needs Gaffer with Arnold, RenderMan, or Cycles. It starts empty. Add shader slots when you need them (up to eight). Each slot is a shader type, a shader name, and the prims it lands on. The shader list follows **Render Engine** on the node, above the tabs.
 
 **Create** assigns new shaders, a MixShader, and textures.
 
@@ -162,8 +161,6 @@ Needs Gaffer with Arnold, RenderMan, or Cycles. It starts empty. Add shader slot
 
 **ShadingTk Manager** sits on the node, directly under **Render Engine**, above the tabs. It is one window with a **Shaders** tab and a **Textures** tab. Shaders are listed in the order they connect, ending at a texture or at the shader itself. Select a shader to edit its attributes, including the TXT button on RGB colours. Textures are listed first. **Edit** on a shader slot opens that shader on the Shaders tab. The **sdvTk** menu items **Shader Manager** and **Texture Manager** open the same window on the matching tab.
 
-Still to implement: an easy UDIM toggle, and animated texture support. A texture path is a string today. Arnold and RenderMan resolve a `<UDIM>` token at render time; Gaffer's own image reader does not expand it.
-
 In Shader Manager, **Presets** loads or saves YAML looks. Built-in samples live in `presets/ShadingTk/`. Point **Preset Folder** at your own directory, or set `SHADINGTK_PRESET_PATH`.
 
 Copy / Paste / Reset on the card header move values between ShadingTk nodes.
@@ -172,11 +169,7 @@ Copy / Paste / Reset on the card header move values between ShadingTk nodes.
 
 ## sdvRenderSettings
 
-A single node for render settings and primitive attributes related to rendering. Tweak them globally on the renderer, or locally on prims, instead of wiring a stack of Options and Attributes nodes. One node covers Arnold, RenderMan, and Cycles.
-
-**Renderer** is always visible. Under it, **Enable Subdivision** and **Enable Displacement** drive the same toggles in the Viewer Arnold settings menu (the viewport menu that also sets Shading / Lighting / Textures to Full). While an `sdvRenderSettings` node is in the script, those viewport toggles follow the checkboxes. If several nodes exist, the last one wins. Deleting the last one restores the viewport defaults.
-
-A new node defaults to Arnold when Arnold is installed, otherwise RenderMan, otherwise Cycles. A node already saved in a scene keeps its stored engine. Switching engine disables every internal Options and Attributes node that is not for that engine, so unused renderers do not run.
+Single node for render settings and primitive attributes related to rendering. Tweak them globally on the renderer, or locally on prims, instead of wiring a stack of Options and Attributes nodes. One node covers Arnold, RenderMan, and Cycles.
 
 | Tab | What it is |
 | --- | --- |
@@ -208,3 +201,10 @@ Shipped samples: Arnold Preview, Draft, and Production; RenderMan Draft and Prod
 Save writes `{Engine}_{Name}.yaml`. Load can pick any YAML file. Applying a preset for another engine switches the engine, then loads options and any attribute sets stored in the file.
 
 Copy / Paste / Reset on the card header copies the engine, options, and attribute sets onto another `sdvRenderSettings`. Reset restores option and attribute defaults and keeps the engine.
+
+---
+
+## Still to implement
+
+- Automated UDIM setup/recognition/toggle
+- Animated texture support
