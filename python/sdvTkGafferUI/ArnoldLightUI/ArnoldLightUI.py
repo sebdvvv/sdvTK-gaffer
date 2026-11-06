@@ -355,12 +355,16 @@ class _ArnoldLightWidget(CardNodeWidget):
             GOBO_MAP_CELL: INTERNAL_GOBO_CELL,
         }.get(kind, "")
         for name in self._rows:
-            if (
-                name.startswith("goboUv:")
-                or name.startswith("goboFocus:")
-                or name.startswith("goboFilter:")
-            ):
+            if name.startswith("goboUv:") or name.startswith("goboFocus:"):
                 self._setRowVisible(name, is_spot)
+            elif name.startswith("goboFilter:"):
+                plug_name = name.split(":", 1)[-1]
+                driven = kind != GOBO_MAP_OFF and plug_name in (
+                    "slidemap",
+                    "slide_map",
+                    "slide",
+                )
+                self._setRowVisible(name, is_spot and not driven)
             elif name.startswith("goboMapParam:"):
                 child = name.split(":")[1] if name.count(":") >= 1 else ""
                 self._setRowVisible(

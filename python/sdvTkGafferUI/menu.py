@@ -164,13 +164,20 @@ def _open_options(*unused) -> None:
 
 
 def _package_nodes():
-    from sdvTkGaffer import ArnoldLight, ArnoldPhysicalSky, ShadingTk, sdvRenderSettings
+    from sdvTkGaffer import (
+        ArnoldLight,
+        ArnoldPhysicalSky,
+        ShadingTk,
+        sdvRenderAttributes,
+        sdvRenderSettings,
+    )
 
     return (
         ("ArnoldLight", ArnoldLight),
         ("ArnoldPhysicalSky", ArnoldPhysicalSky),
         ("ShadingTk", ShadingTk),
         ("sdvRenderSettings", sdvRenderSettings),
+        ("sdvRenderAttributes", sdvRenderAttributes),
     )
 
 

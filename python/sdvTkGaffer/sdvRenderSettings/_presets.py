@@ -270,7 +270,11 @@ def apply_preset(node, preset: dict) -> int:
             options_node["options"], preset.get("options") or {}
         )
     slots = preset.get("slots") or []
-    if isinstance(slots, list) and slots:
+    if (
+        isinstance(slots, list)
+        and slots
+        and callable(getattr(node, "_ensure_slots", None))
+    ):
         node._ensure_slots(len(slots))
         try:
             node["slotCount"].setValue(min(len(slots), 8))

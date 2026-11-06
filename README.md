@@ -6,14 +6,15 @@ One toolkit for lighting, shading, and render settings. Install this repo instea
 
 <img width="856" height="333" alt="gaffer_2026-11-05_22-15-37" src="https://github.com/user-attachments/assets/1eb7f2e6-bf20-454e-b743-1b78dc23c4e7" />
 
-`ShadingTk` and `sdvRenderSettings` support Arnold, RenderMan, and Cycles. 
+`ShadingTk`, `sdvRenderSettings`, and `sdvRenderAttributes` support Arnold, RenderMan, and Cycles. 
 
 | Node |  | Node menu |
 | --- | --- | --- |
 | `ArnoldLight` | One node for any Arnold light (area, spot, mesh, …) | **Arnold → ArnoldLight** |
 | `ArnoldPhysicalSky` | Natural sky: physical sky, HDRI, or a flat colour dome | **Arnold → ArnoldPhysicalSky** |
 | `ShadingTk` | Assign, mix, texture, and edit shaders | **Arnold → ShadingTk** |
-| `sdvRenderSettings` | Renderer options and attribute sets | **Render → sdvRenderSettings** |
+| `sdvRenderSettings` | Renderer options | **Render → sdvRenderSettings** |
+| `sdvRenderAttributes` | MeshType and renderer attribute sets | **Render → sdvRenderAttributes** |
 
 Gaffer type names stay the same (`ArnoldLight.ArnoldLight`, and the same pattern for the others), so existing `.gfr` scripts keep loading.
 
@@ -174,12 +175,37 @@ Copy / Paste / Reset on the card header move values between ShadingTk nodes.
 
 ## sdvRenderSettings
 
-Single node for render settings and primitive attributes related to rendering. Tweak them globally on the renderer, or locally on prims, instead of wiring a stack of Options and Attributes nodes. One node covers Arnold, RenderMan, and Cycles.
+Renderer options. Tweak them globally on the renderer instead of wiring a stack of Options nodes. Arnold, RenderMan, and Cycles.
 
 | Tab |  |
 | --- | --- |
 | **Standard Options** | Gaffer’s standard render options, including the default renderer. |
 | **{Engine} Options** | Native `ArnoldOptions`, `RenderManOptions`, or `CyclesOptions`. Preset menu, Save, and Load. |
+
+**Enable Subdivision** and **Enable Displacement** sit under **Renderer** and drive the matching viewport Arnold toggles.
+
+### Presets
+
+On the Options tab: **Preset**, **Save**, **Load**. YAML is read from:
+
+1. This repo’s `presets/sdvRenderSettings/` folder
+2. **Preset Folder** on the Options tab (optional)
+3. `SDVRENDERSETTINGS_PRESET_PATH` (optional extra folders, `:` / `;` separated)
+
+Shipped samples: Arnold Preview, Draft, and Production; RenderMan Draft and Production; Cycles Draft and Production.
+
+Save writes `{Engine}_{Name}.yaml`. Load can pick any YAML file. Applying a preset for another engine switches the engine, then loads options.
+
+Copy / Paste / Reset on the card header copies the engine and options onto another `sdvRenderSettings`. Reset restores option defaults and keeps the engine.
+
+## sdvRenderAttributes
+
+Primitive attributes for rendering, plus a MeshType at the front of the node. Arnold, RenderMan, and Cycles. Drop it after `sdvRenderSettings` when a look needs both.
+
+**Enable Catmull-Clark Subdivision type** sits under **Renderer**. On sets that MeshType to Catmull-Clark for every mesh. Off leaves interpolation unchanged.
+
+| Tab |  |
+| --- | --- |
 | **{Engine} Attributes** | List of attribute sets. **+** / **−** add or remove sets (0–8). |
 
 Each set adds a tab named after it (default `ArnoldAttributesSet1`, and the same pattern for the other engines). That tab shows the native attributes plugs.
@@ -193,16 +219,4 @@ Each set adds a tab named after it (default `ArnoldAttributesSet1`, and the same
 
 Later sets override earlier ones where paths overlap.
 
-### Presets
-
-On the Options tab: **Preset**, **Save**, **Load**. YAML is read from:
-
-1. This repo’s `presets/sdvRenderSettings/` folder
-2. **Preset Folder** on the Options tab (optional)
-3. `SDVRENDERSETTINGS_PRESET_PATH` (optional extra folders, `:` / `;` separated)
-
-Shipped samples: Arnold Preview, Draft, and Production; RenderMan Draft and Production; Cycles Draft and Production.
-
-Save writes `{Engine}_{Name}.yaml`. Load can pick any YAML file. Applying a preset for another engine switches the engine, then loads options and any attribute sets stored in the file.
-
-Copy / Paste / Reset on the card header copies the engine, options, and attribute sets onto another `sdvRenderSettings`. Reset restores option and attribute defaults and keeps the engine.
+Copy / Paste / Reset on the card header copies the engine, the Catmull-Clark toggle, and attribute sets onto another `sdvRenderAttributes`. Reset restores attribute defaults and keeps the engine.

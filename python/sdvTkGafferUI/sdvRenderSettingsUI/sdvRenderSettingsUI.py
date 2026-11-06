@@ -1,4 +1,4 @@
-"""Node Editor card for sdvRenderSettings — Standard Options, then engine options and attribute sets."""
+"""Node Editor card for sdvRenderSettings — Standard Options, then engine options."""
 
 from __future__ import annotations
 
@@ -12,15 +12,9 @@ import imath
 
 from sdvTkGaffer.sdvRenderSettings.sdvRenderSettings import sdvRenderSettings
 from sdvTkGaffer.sdvRenderSettings._data import (
-    MAX_PATHS,
-    MAX_SLOTS,
-    default_set_name,
     engine_available,
     engine_label,
     import_engine_ui,
-    path_count_plug,
-    path_plug,
-    set_name_plug,
 )
 
 from ._editor import CardNodeWidget, expand_h, native_widget, widget_is_alive
@@ -249,57 +243,8 @@ class _sdvRenderSettingsWidget(CardNodeWidget):
         self._options_tab = self._scroll(self._options_form)
         self._add_tab(self._tabs, self._options_tab, self._options_tab_name())
 
-        self._main_form = GafferUI.ListContainer(
-            GafferUI.ListContainer.Orientation.Vertical, spacing=8
-        )
-        self._main_tab = self._scroll(self._main_form)
-        self._add_tab(self._tabs, self._main_tab, self._attributes_tab_name())
-
-        buttons = GafferUI.ListContainer(
-            GafferUI.ListContainer.Orientation.Horizontal, spacing=6
-        )
-        self._add_slot_button = GafferUI.Button("+")
-        self._add_slot_button.setToolTip(
-            "Add an attribute set (max {}).".format(MAX_SLOTS)
-        )
-        self._remove_slot_button = GafferUI.Button("−")
-        self._remove_slot_button.setToolTip("Remove the last attribute set.")
-        self._buttonConnections.append(
-            self._add_slot_button.clickedSignal().connect(
-                Gaffer.WeakMethod(self.__onAddSlot), scoped=True
-            )
-        )
-        self._buttonConnections.append(
-            self._remove_slot_button.clickedSignal().connect(
-                Gaffer.WeakMethod(self.__onRemoveSlot), scoped=True
-            )
-        )
-        buttons.append(self._add_slot_button)
-        buttons.append(self._remove_slot_button)
-        self._main_form.append(buttons)
-
-        self._slot_frames: list[GafferUI.Widget] = []
-        self._slot_headers: dict[int, GafferUI.Label] = {}
-        self._path_rows: dict[tuple[int, int], GafferUI.Widget] = {}
-        self._path_plus: dict[int, GafferUI.Widget] = {}
-        self._attr_forms: list[GafferUI.ListContainer] = []
-        self._attr_tabs: list[GafferUI.Widget] = []
-        self.__pending_attr: set[int] = set()
-
-        for index in range(1, MAX_SLOTS + 1):
-            self._main_form.append(self._build_slot(index))
-            form = GafferUI.ListContainer(
-                GafferUI.ListContainer.Orientation.Vertical, spacing=6
-            )
-            scroll = self._scroll(form)
-            self._attr_forms.append(form)
-            self._attr_tabs.append(scroll)
-            self._add_tab(self._tabs, scroll, self._slot_tab_name(index))
-
         self._fill_standard_tab()
         self._fill_options_tab()
-        self._syncSlots()
-        self._rebuild_all_attr_tabs()
 
     def _scroll(self, child: GafferUI.Widget) -> GafferUI.ScrolledContainer:
         scroll = GafferUI.ScrolledContainer(
@@ -320,121 +265,6 @@ class _sdvRenderSettingsWidget(CardNodeWidget):
 
     def _options_tab_name(self) -> str:
         return "{} Options".format(engine_label(self._node.currentEngine()))
-
-    def _attributes_tab_name(self) -> str:
-        return "{} Attributes".format(engine_label(self._node.currentEngine()))
-
-    def _build_slot(self, index: int) -> GafferUI.Widget:
-        node = self._node
-        frame = GafferUI.Frame()
-        body = GafferUI.ListContainer(
-            GafferUI.ListContainer.Orientation.Vertical, spacing=6
-        )
-        header = GafferUI.ListContainer(
-            GafferUI.ListContainer.Orientation.Horizontal, spacing=6
-        )
-        title = GafferUI.Label("<b>{}</b>".format(self._slot_tab_name(index)))
-        header.append(title)
-        self._slot_headers[index] = title
-        header.append(GafferUI.Spacer(imath.V2i(8, 1)), expand=True)
-        clear = GafferUI.Button("Clear")
-        clear.setToolTip("Reset this attribute set's name, paths, and values.")
-        self._buttonConnections.append(
-            clear.clickedSignal().connect(
-                functools.partial(self.__onClearSlot, index), scoped=True
-            )
-        )
-        header.append(clear)
-        body.append(header)
-
-        self._addRow(
-            body,
-            "Attribute Set",
-            native_widget(node[set_name_plug(index)]),
-            name="setName{}".format(index),
-        )
-        plus_row = GafferUI.ListContainer(
-            GafferUI.ListContainer.Orientation.Horizontal, spacing=6
-        )
-        plus_row.append(GafferUI.Spacer(imath.V2i(self._LABEL_W, 1)))
-        plus = GafferUI.Button("+")
-        plus.setToolTip("Add another prim path to this set's PathFilter.")
-        minus = GafferUI.Button("−")
-        minus.setToolTip("Remove the last prim path field.")
-        self._buttonConnections.append(
-            plus.clickedSignal().connect(
-                functools.partial(self.__onAddPath, index), scoped=True
-            )
-        )
-        self._buttonConnections.append(
-            minus.clickedSignal().connect(
-                functools.partial(self.__onRemovePath, index), scoped=True
-            )
-        )
-        plus_row.append(plus)
-        plus_row.append(minus)
-        body.append(plus_row)
-        self._path_plus[index] = plus_row
-
-        frame.setChild(body)
-        self._slot_frames.append(frame)
-        self._sync_path_rows(index)
-        return frame
-
-    def _sync_path_rows(self, index: int) -> None:
-        try:
-            path_count = int(self._node[path_count_plug(index)].getValue())
-        except Exception:
-            path_count = 1
-        path_count = max(1, min(path_count, MAX_PATHS))
-        for path_index in range(1, path_count + 1):
-            self._ensure_path_row(index, path_index)
-        extras = [
-            key
-            for key in list(self._path_rows)
-            if key[0] == index and key[1] > path_count
-        ]
-        body = None
-        if index <= len(self._slot_frames):
-            try:
-                body = self._slot_frames[index - 1].getChild()
-            except Exception:
-                body = None
-        for key in extras:
-            row = self._path_rows.pop(key, None)
-            if row is None:
-                continue
-            if body is not None:
-                try:
-                    body.removeChild(row)
-                except Exception:
-                    pass
-
-    def _ensure_path_row(self, index: int, path_index: int) -> None:
-        if (index, path_index) in self._path_rows:
-            return
-        if index < 1 or index > len(self._slot_frames):
-            return
-        path = self._node[path_plug(index, path_index)]
-        widget = _plug_widget(path)
-        if widget is None:
-            return
-        body = self._slot_frames[index - 1].getChild()
-        plus = self._path_plus.get(index)
-        if plus is not None:
-            try:
-                body.removeChild(plus)
-            except Exception:
-                pass
-        row = self._addRow(
-            body,
-            "PrimPath(es) :",
-            widget,
-            name="path{}_{}".format(index, path_index),
-        )
-        self._path_rows[(index, path_index)] = row
-        if plus is not None:
-            body.append(plus)
 
     def _fill_standard_tab(self) -> None:
         if not widget_is_alive(self):
@@ -459,7 +289,6 @@ class _sdvRenderSettingsWidget(CardNodeWidget):
         _clear_container(self._options_form)
         try:
             self._tabs.setLabel(self._options_tab, self._options_tab_name())
-            self._tabs.setLabel(self._main_tab, self._attributes_tab_name())
         except Exception:
             pass
 
@@ -524,149 +353,12 @@ class _sdvRenderSettingsWidget(CardNodeWidget):
             self._options_form.append(_settings_widget(options_node["options"]))
 
     def _onPlugDirtied(self, plug: Gaffer.Plug) -> None:
-        name = plug.getName()
-        if name == "renderEngine":
+        if plug.getName() == "renderEngine":
             self.__rebuildOptionsLazily()
-            self.__pending_attr.update(range(1, MAX_SLOTS + 1))
-            self.__rebuildAttrLazily()
-        elif name == "slotCount":
-            self.__syncSlotsLazily()
-            self.__pending_attr.update(range(1, MAX_SLOTS + 1))
-            self.__rebuildAttrLazily()
-        elif name.startswith("pathCount"):
-            self.__syncSlotsLazily()
-        elif name.startswith("setName"):
-            digits = "".join(ch for ch in name if ch.isdigit())
-            if digits:
-                self._set_tab_label(int(digits))
-
-    @GafferUI.LazyMethod()
-    def __syncSlotsLazily(self) -> None:
-        self._syncSlots()
 
     @GafferUI.LazyMethod()
     def __rebuildOptionsLazily(self) -> None:
         self._fill_options_tab()
-
-    @GafferUI.LazyMethod()
-    def __rebuildAttrLazily(self) -> None:
-        pending = set(self.__pending_attr)
-        self.__pending_attr.clear()
-        if not pending:
-            self._rebuild_all_attr_tabs()
-            return
-        for index in sorted(pending):
-            self._fill_attr_tab(index)
-
-    def _syncSlots(self) -> None:
-        if not widget_is_alive(self):
-            return
-        count = int(self._node["slotCount"].getValue())
-        for index in range(1, MAX_SLOTS + 1):
-            visible = index <= count
-            if index <= len(self._slot_frames):
-                self._slot_frames[index - 1].setVisible(visible)
-            self._set_tab_visible(index, visible)
-            if visible:
-                self._sync_path_rows(index)
-        self._add_slot_button.setEnabled(count < MAX_SLOTS)
-        self._remove_slot_button.setEnabled(count > 0)
-        for index in range(1, MAX_SLOTS + 1):
-            self._set_tab_label(index)
-
-    def _set_tab_visible(self, index: int, visible: bool) -> None:
-        # Slot tabs start after Standard Options, engine Options, and
-        # engine Attributes. Hide by widget so those three stay put.
-        if index < 1 or index > len(self._attr_tabs):
-            return
-        tab = self._attr_tabs[index - 1]
-        try:
-            self._tabs.setTabVisible(tab, visible)
-            return
-        except Exception:
-            pass
-        try:
-            tab.setVisible(visible)
-        except Exception:
-            pass
-
-    def _slot_tab_name(self, index: int) -> str:
-        try:
-            name = (self._node[set_name_plug(index)].getValue() or "").strip()
-        except Exception:
-            name = ""
-        return name or default_set_name(self._node.currentEngine(), index)
-
-    def _set_tab_label(self, index: int) -> None:
-        if not widget_is_alive(self):
-            return
-        label = self._slot_tab_name(index)
-        tab = self._attr_tabs[index - 1]
-        try:
-            self._tabs.setLabel(tab, label)
-        except Exception:
-            qt = self._tabs._qtWidget()
-            setter = getattr(qt, "setTabText", None)
-            if callable(setter):
-                try:
-                    setter(self._tabs.index(tab), label)
-                except Exception:
-                    pass
-        header = self._slot_headers.get(index)
-        if header is not None and widget_is_alive(header):
-            try:
-                header.setText("<b>{}</b>".format(label))
-            except Exception:
-                pass
-
-    def _rebuild_all_attr_tabs(self) -> None:
-        if not widget_is_alive(self):
-            return
-        for index in range(1, MAX_SLOTS + 1):
-            self._fill_attr_tab(index)
-
-    def _fill_attr_tab(self, index: int) -> None:
-        self._set_tab_label(index)
-        form = self._attr_forms[index - 1]
-        _clear_container(form)
-        form.append(GafferUI.Label("<b>{}</b>".format(self._slot_tab_name(index))))
-        engine = self._node.currentEngine()
-        import_engine_ui(engine)
-        attr = self._node.attributesNode(index)
-        if attr is None or "attributes" not in attr:
-            form.append(
-                GafferUI.Label(
-                    "No {} attributes for this set.".format(engine_label(engine))
-                )
-            )
-            return
-        form.append(_settings_widget(attr["attributes"]))
-
-    def __onAddSlot(self, *unused) -> None:
-        script = self._node.scriptNode()
-        with Gaffer.UndoScope(script):
-            self._node.addSlot()
-
-    def __onRemoveSlot(self, *unused) -> None:
-        script = self._node.scriptNode()
-        with Gaffer.UndoScope(script):
-            self._node.removeSlot()
-
-    def __onAddPath(self, index: int, *unused) -> None:
-        script = self._node.scriptNode()
-        with Gaffer.UndoScope(script):
-            self._node.addPath(index)
-
-    def __onRemovePath(self, index: int, *unused) -> None:
-        script = self._node.scriptNode()
-        with Gaffer.UndoScope(script):
-            self._node.removePath(index)
-
-    def __onClearSlot(self, index: int, *unused) -> None:
-        script = self._node.scriptNode()
-        with Gaffer.UndoScope(script):
-            self._node.clearSlot(index)
-        self._fill_attr_tab(index)
 
     def _presetMenuDefinition(self, *unused) -> IECore.MenuDefinition:
         md = IECore.MenuDefinition()
@@ -735,8 +427,6 @@ class _sdvRenderSettingsWidget(CardNodeWidget):
         with Gaffer.UndoScope(script):
             applied = self._node.applyPreset(name, engine)
         self._fill_options_tab()
-        self._rebuild_all_attr_tabs()
-        self._syncSlots()
         IECore.msg(
             IECore.Msg.Level.Info if applied else IECore.Msg.Level.Warning,
             "sdvRenderSettings",
@@ -785,8 +475,6 @@ class _sdvRenderSettingsWidget(CardNodeWidget):
         with Gaffer.UndoScope(script):
             applied = self._node.loadPresetFile(path)
         self._fill_options_tab()
-        self._rebuild_all_attr_tabs()
-        self._syncSlots()
         IECore.msg(
             IECore.Msg.Level.Info if applied else IECore.Msg.Level.Warning,
             "sdvRenderSettings",
@@ -849,8 +537,8 @@ _plugs = {
         "noduleLayout:index": 0,
     },
     "out": {
-        "description": "Incoming scene with renderer options and "
-        "attribute sets applied (passthrough of in when disabled).",
+        "description": "Incoming scene with renderer options applied "
+        "(passthrough of in when disabled).",
         "nodule:type": "GafferUI::StandardNodule",
         "noduleLayout:section": "bottom",
         "noduleLayout:index": 0,
@@ -871,10 +559,6 @@ _plugs = {
         "preset:RenderMan": "renderman",
         "preset:Cycles": "cycles",
     },
-    "slotCount": {
-        "description": "How many attribute sets are active (0–8).",
-        "nodule:type": "",
-    },
     "presetFolder": {
         "description": "Folder of YAML render-settings presets. New nodes "
         "bind to ../../presets relative to this module when that folder "
@@ -885,32 +569,12 @@ _plugs = {
         "path:leaf": False,
     },
 }
-for _index in range(1, MAX_SLOTS + 1):
-    _plugs[set_name_plug(_index)] = {
-        "description": "Name of this attribute set. Also names its tab.",
-        "nodule:type": "",
-    }
-    _plugs[path_count_plug(_index)] = {
-        "description": "How many prim-path fields are shown for this set.",
-        "nodule:type": "",
-    }
-    for _path in range(1, MAX_PATHS + 1):
-        _plugs[path_plug(_index, _path)] = {
-            "description": "Scene prim path for this attribute set. "
-            "Feeds the set's PathFilter. Supports a Gaffer expression. "
-            "All paths share one PathFilter.",
-            "nodule:type": "",
-            "label": "PrimPath(es) :",
-            "plugValueWidget:type": "GafferUI.StringPlugValueWidget",
-        }
-
 Gaffer.Metadata.registerNode(
     sdvRenderSettings,
     "description",
-    "Standard Options, then renderer options (Arnold / RenderMan / Cycles) "
-    "and up to eight attribute sets. Renderer drives Standard Options "
-    "Default Renderer. Renderer options keep YAML presets. Each attribute "
-    "set has its own tab.",
+    "Standard Options, then renderer options (Arnold / RenderMan / Cycles). "
+    "Renderer drives Standard Options Default Renderer. Renderer options "
+    "keep YAML presets. Attribute sets live on sdvRenderAttributes.",
     "nodeGadget:color",
     BOX_SLATE,
     "noduleLayout:customGadget:addButtonTop:gadgetType",

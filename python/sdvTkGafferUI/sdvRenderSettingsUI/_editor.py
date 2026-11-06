@@ -93,8 +93,7 @@ class CardNodeWidget(GafferUI.Widget):
         for label, tip, method in (
             (
                 "Copy",
-                "Copy engine, options, and attribute sets. Paste onto another "
-                "node of the same type.",
+                "Copy this node's values. Paste onto another node of the same type.",
                 self.__onCopyValues,
             ),
             (
@@ -104,7 +103,7 @@ class CardNodeWidget(GafferUI.Widget):
             ),
             (
                 "Reset",
-                "Reset options and attributes to defaults. Engine is kept.",
+                "Reset values to defaults. Renderer is kept.",
                 self.__onResetValues,
             ),
         ):

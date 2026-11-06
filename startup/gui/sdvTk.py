@@ -20,6 +20,7 @@ from sdvTkGaffer import (  # noqa: E402
     ArnoldLight,
     ArnoldPhysicalSky,
     ShadingTk,
+    sdvRenderAttributes,
     sdvRenderSettings,
 )
 
@@ -34,6 +35,7 @@ for _path, _cls, _search in (
     ("/Arnold/ArnoldPhysicalSky", ArnoldPhysicalSky, "ArnoldPhysicalSky"),
     ("/Arnold/ShadingTk", ShadingTk, "ShadingTk"),
     ("/Render/sdvRenderSettings", sdvRenderSettings, "sdvRenderSettings"),
+    ("/Render/sdvRenderAttributes", sdvRenderAttributes, "sdvRenderAttributes"),
 ):
     node_menu.append(path=_path, nodeCreator=_creator(_cls), searchText=_search)
 

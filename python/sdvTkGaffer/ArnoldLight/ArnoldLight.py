@@ -5,8 +5,9 @@ Changing Light Type calls ``loadShader`` on that node so only the
 chosen type's parameters exist. Mesh Light is a separate
 ``ArnoldMeshLight``. Incoming scene + the active light go through
 a Transform, then Group nodes for ``primPath`` (default ``/LIGHTS``,
-max 4), then MergeScenes. A gobo is grouped under ``gobos`` inside
-that same prim-path chain, not merged after it.
+max 4), then MergeScenes. A spot gobo is an Arnold light filter
+parented at ``{primPath}/gobos``. ``filteredLights`` points at this
+light, and the map connects to ``slidemap``.
 
 This is ``ArnoldLight.ArnoldLight``, not ``GafferArnold.ArnoldLight``.
 """
@@ -345,31 +346,30 @@ class ArnoldLight(LightInsertMixin, SceneInsertMixin, Gaffer.Box):
             if on:
                 target = shader
         if gobo is not None and "parameters" in gobo:
-            density = None
-            for name in ("density", "slide_map", "map", "color"):
-                if name in gobo["parameters"]:
-                    density = gobo["parameters"][name]
-                    break
-            if density is not None:
+            params = gobo["parameters"]
+            for name in ("density", "slidemap", "slide_map", "slide", "map", "color"):
+                if name not in params:
+                    continue
                 try:
-                    density.setInput(None)
+                    params[name].setInput(None)
                 except Exception:
                     pass
-                if target is not None:
-                    self.__connect_shader(density, target)
+            slide = None
+            for name in ("slidemap", "slide_map", "slide"):
+                if name in params:
+                    slide = params[name]
+                    break
+            if slide is not None and target is not None:
+                self.__connect_shader(slide, target)
         self._sync_groups()
 
     def _sync_driven_plugs(self) -> None:
         super()._sync_driven_plugs()
         leaf = "light"
         try:
-            leaf = (self["name"].getValue() or "").strip() or "light"
+            leaf = (self["name"].getValue() or "").strip().lstrip("/") or "light"
         except Exception:
-            pass
-        gobo_leaf = "{}_gobo".format(leaf)
-        gobo = self.getChild(INTERNAL_GOBO)
-        if gobo is not None and "name" in gobo:
-            set_plug_value(gobo["name"], gobo_leaf)
+            leaf = "light"
         parent = ""
         try:
             if self["lightType"].getValue() != MESH_LIGHT:
@@ -377,13 +377,11 @@ class ArnoldLight(LightInsertMixin, SceneInsertMixin, Gaffer.Box):
         except Exception:
             parent = ""
         location = "{}/{}".format(parent, leaf) if parent else "/" + leaf
+        gobo = self.getChild(INTERNAL_GOBO)
+        if gobo is not None and "name" in gobo:
+            set_plug_value(gobo["name"], "{}_gobo".format(leaf))
         if gobo is not None and "filteredLights" in gobo:
             set_plug_value(gobo["filteredLights"], location)
-        from ._insert import set_filter_paths
-
-        set_filter_paths(
-            self, "__pathFilter", ["/" + leaf, "/" + gobo_leaf]
-        )
         self._sync_gobo()
 
     def _gobo_active(self) -> bool:
@@ -396,6 +394,7 @@ class ArnoldLight(LightInsertMixin, SceneInsertMixin, Gaffer.Box):
         return kind != GOBO_MAP_OFF
 
     def _ensure_gobo_group(self):
+        """Parent the gobo filter at ``{primPath}/gobos``."""
         group = self.getChild(INTERNAL_GOBO_GROUP)
         if group is None:
             group = GafferScene.Group(INTERNAL_GOBO_GROUP)
@@ -409,6 +408,7 @@ class ArnoldLight(LightInsertMixin, SceneInsertMixin, Gaffer.Box):
                     group["in"][0].setInput(gobo["out"])
             except Exception:
                 pass
+        set_node_enabled(group, True)
         return group
 
     def _group_chain_extra_sources(self) -> list:
