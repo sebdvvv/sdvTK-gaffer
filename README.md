@@ -2,9 +2,8 @@
 
 This is an open-source contribution to [Gaffer](https://github.com/GafferHQ/gaffer), for anyone who wants a quick, production-shaped Arnold lighting workflow instead of wiring stock nodes by hand. It is designed around production-standard requirements, including a single node that provides every element needed for natural sky lighting.
 
-One toolkit for lighting, shading, and render settings. Install this repo instead of the separate node packages.
+<img width="1206" height="403" alt="gaffer_2026-11-07_12-24-30" src="https://github.com/user-attachments/assets/108f2ca8-53bc-4e8f-bb66-37128f4f2b62" />
 
-<img width="856" height="333" alt="gaffer_2026-11-05_22-15-37" src="https://github.com/user-attachments/assets/1eb7f2e6-bf20-454e-b743-1b78dc23c4e7" />
 
 `ShadingTk`, `sdvRenderSettings`, and `sdvRenderAttributes` support Arnold, RenderMan, and Cycles. 
 
