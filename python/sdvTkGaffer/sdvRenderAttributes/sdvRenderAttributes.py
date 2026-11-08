@@ -295,12 +295,80 @@ class sdvRenderAttributes(SceneInsertMixin, Gaffer.Box):
         self._ensure_slots(next_index)
         self["slotCount"].setValue(next_index)
 
-    def removeSlot(self) -> None:
-        count = self["slotCount"].getValue()
-        if count <= 0:
+    def removeSlot(self, index: int | None = None) -> None:
+        count = int(self["slotCount"].getValue())
+        if count < 1:
             return
-        self.clearSlot(count)
+        if index is None:
+            index = count
+        self.removeSlotAt(index)
+
+    def removeSlotAt(self, index: int) -> None:
+        """Drop one set and shift the later sets down."""
+        count = int(self["slotCount"].getValue())
+        if index < 1 or index > count:
+            return
+        self._ensure_slots(count)
+        snapshots = [self._slot_snapshot(src) for src in range(index + 1, count + 1)]
+        self._shifting = True
+        try:
+            for offset, snap in enumerate(snapshots):
+                self._apply_slot_snapshot(index + offset, snap)
+            self.clearSlot(count)
+        finally:
+            self._shifting = False
         self["slotCount"].setValue(count - 1)
+
+    def _slot_snapshot(self, index: int) -> dict:
+        from sdvTkGaffer.sdvRenderSettings._presets import snapshot_name_values
+
+        paths = []
+        for path_index in range(1, MAX_PATHS + 1):
+            try:
+                paths.append(self[path_plug(index, path_index)].getValue())
+            except Exception:
+                paths.append("")
+        attributes = {}
+        for item in ENGINE_ORDER:
+            attr = self.getChild(internal_attributes(item, index))
+            if attr is None or "attributes" not in attr:
+                continue
+            attributes[item] = snapshot_name_values(attr["attributes"])
+        try:
+            path_count = int(self[path_count_plug(index)].getValue())
+        except Exception:
+            path_count = 1
+        try:
+            name = self[set_name_plug(index)].getValue()
+        except Exception:
+            name = ""
+        return {
+            "name": name,
+            "pathCount": path_count,
+            "paths": paths,
+            "attributes": attributes,
+        }
+
+    def _apply_slot_snapshot(self, index: int, snap: dict) -> None:
+        from sdvTkGaffer.sdvRenderSettings._presets import apply_name_values
+
+        self._ensure_slot(index)
+        self[set_name_plug(index)].setValue(snap.get("name") or "")
+        count = max(1, min(int(snap.get("pathCount") or 1), MAX_PATHS))
+        self[path_count_plug(index)].setValue(count)
+        paths = list(snap.get("paths") or [])
+        for path_index in range(1, MAX_PATHS + 1):
+            value = paths[path_index - 1] if path_index <= len(paths) else ""
+            self[path_plug(index, path_index)].setValue(value or "")
+        attributes = snap.get("attributes") or {}
+        for item in ENGINE_ORDER:
+            payload = attributes.get(item)
+            if not isinstance(payload, dict):
+                continue
+            attr = self.getChild(internal_attributes(item, index))
+            if attr is None or "attributes" not in attr:
+                continue
+            apply_name_values(attr["attributes"], payload)
 
     def addPath(self, index: int) -> None:
         plug = self[path_count_plug(index)]
@@ -324,22 +392,11 @@ class sdvRenderAttributes(SceneInsertMixin, Gaffer.Box):
         self[path_count_plug(index)].setValue(1)
         for path_index in range(1, MAX_PATHS + 1):
             self[path_plug(index, path_index)].setValue("")
-        attr = self.attributesNode(index)
-        if attr is not None and "attributes" in attr:
-            reset = getattr(attr["attributes"], "setToDefault", None)
-            if callable(reset):
-                try:
-                    reset()
-                except Exception:
-                    pass
-            else:
-                for plug in attr["attributes"].children():
-                    child_reset = getattr(plug, "setToDefault", None)
-                    if callable(child_reset):
-                        try:
-                            child_reset()
-                        except Exception:
-                            pass
+        for item in ENGINE_ORDER:
+            attr = self.getChild(internal_attributes(item, index))
+            if attr is None or "attributes" not in attr:
+                continue
+            _reset_plug(attr["attributes"])
 
     def copyValues(self) -> dict:
         from sdvTkGaffer.sdvRenderSettings._values import snapshot
@@ -368,6 +425,8 @@ class sdvRenderAttributes(SceneInsertMixin, Gaffer.Box):
 
     def _on_plug_set(self, plug: Gaffer.Plug) -> None:
         name = plug.getName()
+        if getattr(self, "_shifting", False):
+            return
         if name == "slotCount":
             try:
                 self._ensure_slots(int(plug.getValue()))
@@ -375,6 +434,19 @@ class sdvRenderAttributes(SceneInsertMixin, Gaffer.Box):
                 pass
         if getattr(self, "_sdvRenderAttributes__slotsReady", False):
             self._sync_driven_plugs()
+
+
+def _reset_plug(plug: Gaffer.Plug) -> None:
+    reset = getattr(plug, "setToDefault", None)
+    if callable(reset):
+        try:
+            reset()
+            return
+        except Exception:
+            pass
+    for child in plug.children():
+        if isinstance(child, Gaffer.Plug):
+            _reset_plug(child)
 
 
 def _set_input(plug: Gaffer.Plug, source: Gaffer.Plug) -> None:

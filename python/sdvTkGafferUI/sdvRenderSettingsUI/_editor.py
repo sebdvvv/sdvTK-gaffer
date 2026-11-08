@@ -119,6 +119,9 @@ class CardNodeWidget(GafferUI.Widget):
             header.append(button)
         for widget in self._headerTrailingWidgets():
             header.append(widget)
+        from sdvTkGafferUI.nodeHelp import append_help_button
+
+        append_help_button(header, self._node, self._buttonConnections)
         body.append(header)
         card.setChild(body)
         self._column.append(card)

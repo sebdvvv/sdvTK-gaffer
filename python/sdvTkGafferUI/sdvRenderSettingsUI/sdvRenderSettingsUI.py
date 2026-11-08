@@ -598,7 +598,7 @@ Gaffer.Metadata.registerNode(
     plugs=_plugs,
 )
 
-register_node_icon(sdvRenderSettings, "renderConfig-gaffer.png", "sdvRenderSettings.png")
+register_node_icon(sdvRenderSettings, "sdvRenderSettings.png")
 
 
 def _pick_directory(widget: GafferUI.Widget, start: str) -> str:

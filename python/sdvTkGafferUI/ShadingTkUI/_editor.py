@@ -45,6 +45,40 @@ def _install_safe_widget_visible() -> None:
 _install_safe_widget_visible()
 
 
+def _qt_policy():
+    try:
+        from Qt import QtWidgets
+
+        return QtWidgets.QSizePolicy
+    except Exception:
+        return None
+
+
+def fit_width(widget: GafferUI.Widget) -> GafferUI.Widget:
+    """Use the panel width. The widget's own text width does not widen the editor."""
+    try:
+        qt_widget = widget._qtWidget()
+        policy = _qt_policy()
+        if policy is None:
+            return widget
+        qt_widget.setMinimumWidth(0)
+        qt_widget.setSizePolicy(policy(policy.Expanding, policy.Preferred))
+    except Exception:
+        pass
+    return widget
+
+
+def note_label(text: str) -> GafferUI.Label:
+    """Paragraph that wraps inside the node editor instead of stretching it."""
+    label = GafferUI.Label(text)
+    try:
+        qt_widget = label._qtWidget()
+        qt_widget.setWordWrap(True)
+    except Exception:
+        pass
+    return fit_width(label)
+
+
 def expand_h(widget: GafferUI.Widget) -> GafferUI.Widget:
     try:
         qt_widget = widget._qtWidget()
@@ -254,6 +288,9 @@ class CardNodeWidget(GafferUI.Widget):
             header.append(button)
         for widget in self._headerTrailingWidgets():
             header.append(widget)
+        from sdvTkGafferUI.nodeHelp import append_help_button
+
+        append_help_button(header, self._node, self._buttonConnections)
         body.append(header)
         card.setChild(body)
         self._column.append(card)
@@ -339,11 +376,15 @@ class CardNodeWidget(GafferUI.Widget):
         width = self._LABEL_W if label_width is None else label_width
         try:
             if text_label:
-                pass
+                target = None
             elif isinstance(lbl, GafferUI.LabelPlugValueWidget):
-                lbl.label()._qtWidget().setFixedWidth(width)
+                target = lbl.label()._qtWidget()
             else:
-                lbl._qtWidget().setFixedWidth(width)
+                target = lbl._qtWidget()
+            if target is not None:
+                target.setWordWrap(True)
+                target.setMinimumWidth(0)
+                target.setFixedWidth(width)
         except Exception:
             pass
         row.append(lbl)

@@ -76,12 +76,19 @@ def _collect(node: Gaffer.Node) -> dict:
     return values
 
 
+def _paste_order(item: tuple) -> tuple:
+    """Public plugs first so an on-demand rig exists before its parameters."""
+    path = item[0]
+    if path in ("lightType", "skyType"):
+        return (0, path)
+    if path.startswith("__"):
+        return (2, path)
+    return (1, path)
+
+
 def _apply(node: Gaffer.Node, values: dict) -> int:
     applied = 0
-    items = sorted(
-        values.items(),
-        key=lambda item: (0 if item[0] in ("lightType", "skyType") else 1, item[0]),
-    )
+    items = sorted(values.items(), key=_paste_order)
     for path, value in items:
         plug = _plug_at(node, path)
         if plug is None or plug.getInput() is not None:

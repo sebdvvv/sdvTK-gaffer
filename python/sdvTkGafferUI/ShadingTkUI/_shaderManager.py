@@ -202,9 +202,11 @@ class ShaderManagerWindow(GafferUI.ListContainer):
     def __onNodePlug(self, plug) -> None:
         name = plug.getName() if plug is not None else ""
         structural = (
-            name in ("slotCount", "mixEnabled", "mixType", "mixName", "mixCount", "globalAssign", "matteEnabled", "diagEnabled", "diagShader")
+            name in ("slotCount", "mixEnabled", "mixType", "mixName", "mixCount", "globalAssign", "matteEnabled", "diagEnabled", "diagShader", "oslCount")
             or name.startswith("shaderType")
             or name.startswith("shaderName")
+            or name.startswith("oslName")
+            or name.startswith("oslExternal")
             or name.startswith("textureType")
             or name.startswith("displacementType")
             or name.startswith("mixInput")

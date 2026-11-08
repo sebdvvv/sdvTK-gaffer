@@ -1,8 +1,8 @@
-"""Graph Editor icons for sdvRenderSettings.
+"""Graph Editor icons for sdvRenderSettings and sdvRenderAttributes.
 
 Drop a PNG in this extension's ``graphics/`` or ``icons/`` folder.
-Looked up in order, first hit wins: ``renderConfig-gaffer.png``,
-``sdvRenderSettings.png``.
+``sdvRenderSettings.png`` is the sdvRenderSettings icon.
+``sdvRenderAttributes.png`` is the sdvRenderAttributes icon.
 """
 
 from __future__ import annotations

@@ -5,9 +5,10 @@ Changing Light Type calls ``loadShader`` on that node so only the
 chosen type's parameters exist. Mesh Light is a separate
 ``ArnoldMeshLight``. Incoming scene + the active light go through
 a Transform, then Group nodes for ``primPath`` (default ``/LIGHTS``,
-max 4), then MergeScenes. A spot gobo is an Arnold light filter
-parented at ``{primPath}/gobos``. ``filteredLights`` points at this
-light, and the map connects to ``slidemap``.
+max 4), then MergeScenes. A spot gobo (filter, map shader, and the
+group that parents it) is created only while Gobo Map is in use.
+``filteredLights`` points at this light, and the map connects to
+``slidemap``.
 
 This is ``ArnoldLight.ArnoldLight``, not ``GafferArnold.ArnoldLight``.
 """
@@ -57,6 +58,7 @@ from ._insert import (
     set_node_enabled,
     set_plug_value,
     set_switch_index,
+    _remove_internal_node,
 )
 
 DEFAULT_LIGHT_TYPE = ARNOLD_LIGHT_TYPES[0][0]  # quad_light / Area
@@ -73,6 +75,91 @@ NAME_TYPE_ALIASES = {
 DEFAULT_PRIM_NAME = constructed_indexed_name(
     "label", prim_type_token(DEFAULT_LIGHT_TYPE, NAME_TYPE_ALIASES), 1
 )
+
+
+def _capture_parameters(parameters: Gaffer.Plug) -> dict:
+    values = {}
+    for plug in parameters.children():
+        if not isinstance(plug, Gaffer.Plug):
+            continue
+        _capture_plug(plug, plug.getName(), values)
+    return values
+
+
+def _capture_plug(plug: Gaffer.Plug, path: str, values: dict) -> None:
+    if plug.getInput() is not None or plug.getName().startswith("__"):
+        return
+    getter = getattr(plug, "getValue", None)
+    if callable(getter) and not isinstance(plug, Gaffer.TransformPlug):
+        try:
+            encoded = _json_value(getter())
+        except Exception:
+            encoded = None
+        if encoded is not None:
+            values[path] = encoded
+            return
+    for child in plug.children():
+        if isinstance(child, Gaffer.Plug):
+            _capture_plug(child, path + "." + child.getName(), values)
+
+
+def _json_value(value):
+    if isinstance(value, bool) or value is None:
+        return value
+    if isinstance(value, (int, float, str)):
+        return value
+    if hasattr(value, "r") and hasattr(value, "g") and hasattr(value, "b"):
+        parts = [float(value.r), float(value.g), float(value.b)]
+        if hasattr(value, "a"):
+            parts.append(float(value.a))
+        return parts
+    if hasattr(value, "x") and hasattr(value, "y"):
+        parts = [float(value.x), float(value.y)]
+        if hasattr(value, "z"):
+            parts.append(float(value.z))
+        if hasattr(value, "w"):
+            parts.append(float(value.w))
+        return parts
+    return None
+
+
+def _apply_parameters(parameters: Gaffer.Plug, values: dict) -> None:
+    for path, value in values.items():
+        plug = parameters
+        for part in str(path).split("."):
+            if part not in plug:
+                plug = None
+                break
+            plug = plug[part]
+        if plug is None:
+            continue
+        _apply_json(plug, value)
+
+
+def _apply_json(plug: Gaffer.Plug, value) -> None:
+    if plug.getInput() is not None:
+        return
+    setter = getattr(plug, "setValue", None)
+    if not callable(setter):
+        return
+    try:
+        if isinstance(value, list):
+            kind = plug.typeName()
+            if "Color3f" in kind and len(value) >= 3:
+                setter(imath.Color3f(*value[:3]))
+                return
+            if "Color4f" in kind and len(value) >= 4:
+                setter(imath.Color4f(*value[:4]))
+                return
+            if "V3f" in kind and len(value) >= 3:
+                setter(imath.V3f(*value[:3]))
+                return
+            if "V2f" in kind and len(value) >= 2:
+                setter(imath.V2f(*value[:2]))
+                return
+        setter(value)
+    except Exception:
+        pass
 
 
 def internal_light_name(shader_name: str) -> str:
@@ -128,6 +215,9 @@ class ArnoldLight(LightInsertMixin, SceneInsertMixin, Gaffer.Box):
             Gaffer.StringPlug("lightType", defaultValue=DEFAULT_LIGHT_TYPE)
         )
         self.addChild(Gaffer.StringPlug("goboMap", defaultValue=GOBO_MAP_OFF))
+        gobo_state = Gaffer.StringPlug("goboState", defaultValue="")
+        self.addChild(gobo_state)
+        Gaffer.Metadata.registerValue(gobo_state, "nodule:type", "")
         self.addChild(Gaffer.TransformPlug("transform"))
 
         light = self.__make_light(GafferArnold, DEFAULT_LIGHT_TYPE)
@@ -147,8 +237,6 @@ class ArnoldLight(LightInsertMixin, SceneInsertMixin, Gaffer.Box):
             if "filter" in mesh_light:
                 mesh_light["filter"].setInput(mesh_filter["out"])
 
-        self.__make_gobo(GafferArnold)
-
         path_filter = GafferScene.PathFilter("__pathFilter")
         self.addChild(path_filter)
         path_filter["paths"].setValue(
@@ -162,7 +250,6 @@ class ArnoldLight(LightInsertMixin, SceneInsertMixin, Gaffer.Box):
         xform["transform"].setInput(self["transform"])
 
         gl_drawn = add_gl_drawing(self, xform["out"], path_filter["out"])
-        self._ensure_gobo_group()
         grouped = add_group_chain(
             self, gl_drawn, extra_sources=self._group_chain_extra_sources()
         )
@@ -320,51 +407,200 @@ class ArnoldLight(LightInsertMixin, SceneInsertMixin, Gaffer.Box):
             return False
         return True
 
-    def _sync_gobo(self) -> None:
-        kind = self._current_type()
-        map_kind = GOBO_MAP_OFF
-        try:
-            map_kind = (self["goboMap"].getValue() or "").strip() or GOBO_MAP_OFF
-        except Exception:
-            map_kind = GOBO_MAP_OFF
-        active = kind == SPOT_LIGHT and map_kind != GOBO_MAP_OFF
-        gobo = self.getChild(INTERNAL_GOBO)
-        if gobo is not None:
-            set_node_enabled(gobo, active)
-        shaders = {
+    def __getitem__(self, key):
+        if isinstance(key, str):
+            self._ensure_named_gobo_child(key)
+        return Gaffer.Box.__getitem__(self, key)
+
+    def _gobo_shader_names(self) -> dict:
+        return {
             GOBO_MAP_FILE: INTERNAL_GOBO_IMAGE,
             GOBO_MAP_NOISE: INTERNAL_GOBO_NOISE,
             GOBO_MAP_CELL: INTERNAL_GOBO_CELL,
         }
-        target = None
-        for map_name, child_name in shaders.items():
-            shader = self.getChild(child_name)
-            if shader is None:
-                continue
-            on = active and map_kind == map_name
-            set_node_enabled(shader, on)
-            if on:
-                target = shader
-        if gobo is not None and "parameters" in gobo:
-            params = gobo["parameters"]
-            for name in ("density", "slidemap", "slide_map", "slide", "map", "color"):
-                if name not in params:
-                    continue
-                try:
-                    params[name].setInput(None)
-                except Exception:
-                    pass
-            slide = None
-            for name in ("slidemap", "slide_map", "slide"):
-                if name in params:
-                    slide = params[name]
-                    break
-            if slide is not None and target is not None:
-                self.__connect_shader(slide, target)
-        self._sync_groups()
 
-    def _sync_driven_plugs(self) -> None:
-        super()._sync_driven_plugs()
+    def _gobo_rig_names(self) -> tuple:
+        return (
+            INTERNAL_GOBO,
+            INTERNAL_GOBO_GROUP,
+            INTERNAL_GOBO_IMAGE,
+            INTERNAL_GOBO_NOISE,
+            INTERNAL_GOBO_CELL,
+        )
+
+    def _gobo_rig_present(self) -> bool:
+        return any(self.getChild(name) is not None for name in self._gobo_rig_names())
+
+    def _ensure_named_gobo_child(self, name: str) -> None:
+        """Recreate a gobo child a saved script still addresses by name."""
+        if self.getChild(name) is not None:
+            return
+        if name == INTERNAL_GOBO:
+            self._ensure_gobo_filter()
+        elif name == INTERNAL_GOBO_GROUP:
+            self._ensure_gobo_group()
+        elif name in self._gobo_shader_names().values():
+            self._ensure_gobo_shader(name, restore=False)
+
+    def _sync_gobo(self) -> None:
+        if getattr(self, "_syncingGobo", False):
+            return
+        self._syncingGobo = True
+        try:
+            if not self._gobo_active():
+                if self._gobo_rig_present():
+                    self._remember_gobo_rig()
+                    self._remove_gobo_rig()
+                    self._sync_groups()
+                return
+            self._ensure_gobo_filter()
+            wanted = self._gobo_shader_names().get(self._gobo_map_kind())
+            for child_name in self._gobo_shader_names().values():
+                if child_name == wanted:
+                    continue
+                shader = self.getChild(child_name)
+                if shader is None:
+                    continue
+                self._remember_gobo_node(shader)
+                _remove_internal_node(self, shader)
+            if wanted:
+                self._ensure_gobo_shader(wanted, restore=True)
+            self._wire_gobo_slide()
+            self._sync_gobo_location()
+            self._ensure_gobo_group()
+            self._sync_groups()
+        finally:
+            self._syncingGobo = False
+
+    def _gobo_map_kind(self) -> str:
+        try:
+            return (self["goboMap"].getValue() or "").strip() or GOBO_MAP_OFF
+        except Exception:
+            return GOBO_MAP_OFF
+
+    def _remember_gobo_rig(self) -> None:
+        for name in self._gobo_rig_names():
+            if name == INTERNAL_GOBO_GROUP:
+                continue
+            self._remember_gobo_node(self.getChild(name))
+
+    def _remember_gobo_node(self, node) -> None:
+        if node is None or "parameters" not in node:
+            return
+        state = self._read_gobo_state()
+        state[node.getName()] = _capture_parameters(node["parameters"])
+        self._write_gobo_state(state)
+
+    def _read_gobo_state(self) -> dict:
+        try:
+            raw = self["goboState"].getValue() or ""
+        except Exception:
+            return {}
+        if not str(raw).strip():
+            return {}
+        try:
+            import json
+
+            data = json.loads(raw)
+        except Exception:
+            return {}
+        return data if isinstance(data, dict) else {}
+
+    def _write_gobo_state(self, state: dict) -> None:
+        try:
+            import json
+
+            self["goboState"].setValue(json.dumps(state))
+        except Exception:
+            pass
+
+    def _restore_gobo_node(self, node) -> None:
+        saved = self._read_gobo_state().get(node.getName())
+        if not isinstance(saved, dict) or "parameters" not in node:
+            return
+        _apply_parameters(node["parameters"], saved)
+
+    def _remove_gobo_rig(self) -> None:
+        for name in self._gobo_rig_names():
+            child = self.getChild(name)
+            if child is not None:
+                _remove_internal_node(self, child)
+
+    def _ensure_gobo_filter(self):
+        existing = self.getChild(INTERNAL_GOBO)
+        if existing is not None:
+            set_node_enabled(existing, True)
+            return existing
+        try:
+            import GafferArnold
+
+            gobo = GafferArnold.ArnoldLightFilter(INTERNAL_GOBO)
+            gobo.loadShader("gobo")
+        except Exception as exc:
+            IECore.msg(
+                IECore.Msg.Level.Warning,
+                "ArnoldLight",
+                "Could not create gobo filter ({})".format(exc),
+            )
+            return None
+        self.addChild(gobo)
+        set_node_enabled(gobo, True)
+        self._restore_gobo_node(gobo)
+        return gobo
+
+    def _ensure_gobo_shader(self, child_name: str, *, restore: bool):
+        existing = self.getChild(child_name)
+        if existing is not None:
+            set_node_enabled(existing, True)
+            return existing
+        shader_name = {
+            INTERNAL_GOBO_IMAGE: "image",
+            INTERNAL_GOBO_NOISE: "noise",
+            INTERNAL_GOBO_CELL: "cell_noise",
+        }.get(child_name)
+        if not shader_name:
+            return None
+        try:
+            import GafferArnold
+
+            shader = GafferArnold.ArnoldShader(child_name)
+            shader.loadShader(shader_name)
+        except Exception:
+            return None
+        self.addChild(shader)
+        set_node_enabled(shader, True)
+        if shader_name == "image":
+            self.__tag_gobo_filename(shader)
+        if restore:
+            self._restore_gobo_node(shader)
+        return shader
+
+    def _wire_gobo_slide(self) -> None:
+        gobo = self.getChild(INTERNAL_GOBO)
+        wanted = self._gobo_shader_names().get(self._gobo_map_kind())
+        target = self.getChild(wanted) if wanted else None
+        if gobo is None or "parameters" not in gobo:
+            return
+        params = gobo["parameters"]
+        for name in ("density", "slidemap", "slide_map", "slide", "map", "color"):
+            if name not in params:
+                continue
+            try:
+                params[name].setInput(None)
+            except Exception:
+                pass
+        slide = None
+        for name in ("slidemap", "slide_map", "slide"):
+            if name in params:
+                slide = params[name]
+                break
+        if slide is not None and target is not None:
+            self.__connect_shader(slide, target)
+
+    def _sync_gobo_location(self) -> None:
+        gobo = self.getChild(INTERNAL_GOBO)
+        if gobo is None:
+            return
         leaf = "light"
         try:
             leaf = (self["name"].getValue() or "").strip().lstrip("/") or "light"
@@ -377,11 +613,13 @@ class ArnoldLight(LightInsertMixin, SceneInsertMixin, Gaffer.Box):
         except Exception:
             parent = ""
         location = "{}/{}".format(parent, leaf) if parent else "/" + leaf
-        gobo = self.getChild(INTERNAL_GOBO)
-        if gobo is not None and "name" in gobo:
+        if "name" in gobo:
             set_plug_value(gobo["name"], "{}_gobo".format(leaf))
-        if gobo is not None and "filteredLights" in gobo:
+        if "filteredLights" in gobo:
             set_plug_value(gobo["filteredLights"], location)
+
+    def _sync_driven_plugs(self) -> None:
+        super()._sync_driven_plugs()
         self._sync_gobo()
 
     def _gobo_active(self) -> bool:
@@ -473,36 +711,6 @@ class ArnoldLight(LightInsertMixin, SceneInsertMixin, Gaffer.Box):
                 return
             except Exception:
                 continue
-
-    def __make_gobo(self, GafferArnold) -> None:
-        try:
-            gobo = GafferArnold.ArnoldLightFilter(INTERNAL_GOBO)
-            gobo.loadShader("gobo")
-        except Exception as exc:
-            IECore.msg(
-                IECore.Msg.Level.Warning,
-                "ArnoldLight",
-                "Could not create gobo filter ({})".format(exc),
-            )
-            return
-        self.addChild(gobo)
-        set_node_enabled(gobo, False)
-        self._ensure_gobo_group()
-        specs = (
-            (INTERNAL_GOBO_IMAGE, "image"),
-            (INTERNAL_GOBO_NOISE, "noise"),
-            (INTERNAL_GOBO_CELL, "cell_noise"),
-        )
-        for child_name, shader_name in specs:
-            try:
-                shader = GafferArnold.ArnoldShader(child_name)
-                shader.loadShader(shader_name)
-            except Exception:
-                continue
-            self.addChild(shader)
-            set_node_enabled(shader, False)
-            if shader_name == "image":
-                self.__tag_gobo_filename(shader)
 
     @staticmethod
     def __tag_gobo_filename(shader: Gaffer.Node) -> None:

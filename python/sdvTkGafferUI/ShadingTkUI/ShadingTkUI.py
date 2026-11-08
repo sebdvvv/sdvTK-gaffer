@@ -46,11 +46,18 @@ from ._editor import (
     clear_container,
     expand_h,
     native_widget,
+    note_label,
     plug_widget,
     release_plug_widgets,
     widget_is_alive,
 )
 from ._icons import register_node_icon
+from ._oslTab import (
+    append_osl_settings,
+    install_osl_tab,
+    refresh_osl_status,
+    sync_osl_tab,
+)
 
 BOX_PURPLE = imath.Color3f(72 / 255, 36 / 255, 118 / 255)
 HAS_TEXTURES_COLOR = "#43a047"
@@ -494,21 +501,18 @@ class _ShadingTkWidget(CardNodeWidget):
         expand_h(self._tabs)
         card.append(self._tabs)
 
-        self._tab_main = GafferUI.TabbedContainer()
-        expand_h(self._tab_main)
-
         globals_form = GafferUI.ListContainer(
             GafferUI.ListContainer.Orientation.Vertical, spacing=8
         )
         self._globals_tab = self._scroll(globals_form)
-        self._add_tab(self._tab_main, self._globals_tab, "Globals")
+        self._add_tab(self._tabs, self._globals_tab, "Globals")
         self._build_globals_tab(globals_form)
 
         main_form = GafferUI.ListContainer(
             GafferUI.ListContainer.Orientation.Vertical, spacing=8
         )
-        self._add_tab(self._tab_main, self._scroll(main_form), "Shader slots")
-        self._add_tab(self._tabs, self._tab_main, "Main")
+        self._shader_slots_tab = self._scroll(main_form)
+        self._add_tab(self._tabs, self._shader_slots_tab, "Shader Binding slots")
 
         buttons = GafferUI.ListContainer(
             GafferUI.ListContainer.Orientation.Horizontal, spacing=6
@@ -557,8 +561,9 @@ class _ShadingTkWidget(CardNodeWidget):
         )
         self._mix_form = mix_form
         self._tab_mix = self._scroll(mix_form)
-        self._add_tab(self._tab_main, self._tab_mix, "MixShader")
+        self._add_tab(self._tabs, self._tab_mix, "MixShader")
         self._build_mix_tab(mix_form)
+        install_osl_tab(self)
 
         sampling_form = GafferUI.ListContainer(
             GafferUI.ListContainer.Orientation.Vertical, spacing=8
@@ -700,19 +705,21 @@ class _ShadingTkWidget(CardNodeWidget):
             except Exception:
                 pass
             self._syncSamplingControls()
+            self._syncOsl()
             return
         self._syncSlots()
         self._syncGlobalTab()
         self._syncMixControls()
         self._bind_texture_label_watchers()
         self._syncSamplingControls()
+        self._syncOsl()
 
     def _apply_tab_visibility(self, edit: bool) -> None:
-        create_tabs = (getattr(self, "_tab_main", None),)
-        for tab in create_tabs:
-            self._set_top_tab_visible(tab, not edit)
+        for name in ("_globals_tab", "_shader_slots_tab", "_tab_mix"):
+            self._set_top_tab_visible(getattr(self, name, None), not edit)
         self._set_top_tab_visible(getattr(self, "_assign_tab", None), edit)
         self._set_top_tab_visible(getattr(self, "_edit_tab", None), edit)
+        self._set_top_tab_visible(getattr(self, "_osl_tab", None), True)
         self._set_top_tab_visible(getattr(self, "_sampling_tab", None), True)
         self._set_top_tab_visible(getattr(self, "_tab_settings", None), True)
         naming = getattr(self, "_settings_naming", None)
@@ -724,7 +731,7 @@ class _ShadingTkWidget(CardNodeWidget):
         if edit:
             current = getattr(self, "_edit_tab", None) or self._assign_tab
         else:
-            current = getattr(self, "_tab_main", None)
+            current = getattr(self, "_globals_tab", None)
         if current is None:
             return
         try:
@@ -778,7 +785,7 @@ class _ShadingTkWidget(CardNodeWidget):
 
     def _build_globals_tab(self, form: GafferUI.ListContainer) -> None:
         form.append(
-            GafferUI.Label(
+            note_label(
                 "Scene-wide assignments. These are not shader slots — "
                 "slots still override them on their own prims.<br><br>"
                 "Global Shader Override: This section allows to quickly "
@@ -883,6 +890,7 @@ class _ShadingTkWidget(CardNodeWidget):
                 "Mixed parents: variousPick1_{suffix}."
             )
         )
+        append_osl_settings(self, form)
 
     def _build_mix_tab(self, form: GafferUI.ListContainer) -> None:
         form.append(
@@ -1248,6 +1256,12 @@ class _ShadingTkWidget(CardNodeWidget):
         self._textures_status = GafferUI.Label("")
         form.append(self._textures_status)
 
+    def openShaderManager(self, key=None) -> None:
+        self.__onOpenShaderManager(key)
+
+    def pickInto(self, plug_name: str) -> None:
+        self.__pick_into(plug_name)
+
     def __onOpenManager(self, *unused) -> None:
         from ._managerWindow import acquire_shadingtk_manager
 
@@ -1523,6 +1537,16 @@ class _ShadingTkWidget(CardNodeWidget):
         if name == "mode":
             self.__syncModeLazily()
             return
+        if (
+            name == "oslCount"
+            or name.startswith("oslExternal")
+            or name.startswith("oslName")
+        ):
+            self.__syncOslLazily()
+            return
+        if name.startswith("oslCode"):
+            self.__refreshOslStatusLazily()
+            return
         if name == "assignCount" or name.startswith("assignSource") or name.startswith("assignPath"):
             if self._is_edit_mode():
                 self._syncAssignSlots()
@@ -1602,6 +1626,21 @@ class _ShadingTkWidget(CardNodeWidget):
         if not widget_is_alive(self):
             return
         self._syncMode()
+
+    def _syncOsl(self) -> None:
+        sync_osl_tab(self)
+
+    @GafferUI.LazyMethod(deferUntilVisible=False)
+    def __syncOslLazily(self) -> None:
+        if not widget_is_alive(self):
+            return
+        self._syncOsl()
+
+    @GafferUI.LazyMethod(deferUntilVisible=False)
+    def __refreshOslStatusLazily(self) -> None:
+        if not widget_is_alive(self):
+            return
+        refresh_osl_status(self)
 
     @GafferUI.LazyMethod(deferUntilVisible=False)
     def __syncSlotsLazily(self) -> None:

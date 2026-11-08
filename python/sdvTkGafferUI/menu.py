@@ -51,6 +51,13 @@ def install(application=None) -> None:
         },
     )
     menu.append(
+        "/sdvTk/Lights Manager",
+        {
+            "command": _open_lights_manager,
+            "description": "Lights in the script, with filters, shaders and textures",
+        },
+    )
+    menu.append(
         "/sdvTk/About",
         {"command": _open_about, "description": "About sdvTk"},
     )
@@ -626,6 +633,20 @@ def _open_folder(path: str) -> None:
 
 def _open_shader_manager(menu, *unused) -> None:
     _open_shading_manager(menu, "shader")
+
+
+def _open_lights_manager(menu, *unused) -> None:
+    script = _script_from_menu(menu)
+    if script is None:
+        return
+    parent = None
+    try:
+        parent = menu.ancestor(GafferUI.ScriptWindow)
+    except Exception:
+        parent = None
+    from sdvTkGafferUI.ShadingTkUI._lightsManager import acquire_lights_manager
+
+    acquire_lights_manager(script, parent)
 
 
 def _open_texture_manager(menu, *unused) -> None:

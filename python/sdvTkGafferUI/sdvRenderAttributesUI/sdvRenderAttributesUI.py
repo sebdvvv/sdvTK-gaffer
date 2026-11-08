@@ -78,29 +78,21 @@ class _sdvRenderAttributesWidget(CardNodeWidget):
             GafferUI.ListContainer.Orientation.Vertical, spacing=8
         )
         self._main_tab = self._scroll(self._main_form)
-        self._add_tab(self._tabs, self._main_tab, self._attributes_tab_name())
+        self._add_tab(self._tabs, self._main_tab, "Main")
 
         buttons = GafferUI.ListContainer(
             GafferUI.ListContainer.Orientation.Horizontal, spacing=6
         )
-        self._add_slot_button = GafferUI.Button("+")
+        self._add_slot_button = GafferUI.Button(self._add_button_label())
         self._add_slot_button.setToolTip(
             "Add an attribute set (max {}).".format(MAX_SLOTS)
         )
-        self._remove_slot_button = GafferUI.Button("−")
-        self._remove_slot_button.setToolTip("Remove the last attribute set.")
         self._buttonConnections.append(
             self._add_slot_button.clickedSignal().connect(
                 Gaffer.WeakMethod(self.__onAddSlot), scoped=True
             )
         )
-        self._buttonConnections.append(
-            self._remove_slot_button.clickedSignal().connect(
-                Gaffer.WeakMethod(self.__onRemoveSlot), scoped=True
-            )
-        )
         buttons.append(self._add_slot_button)
-        buttons.append(self._remove_slot_button)
         self._main_form.append(buttons)
 
         self._slot_frames: list[GafferUI.Widget] = []
@@ -141,8 +133,21 @@ class _sdvRenderAttributesWidget(CardNodeWidget):
             tabs.addChild(child)
             tabs.setLabel(child, label)
 
-    def _attributes_tab_name(self) -> str:
-        return "{} Attributes".format(engine_label(self._node.currentEngine()))
+    def _add_button_label(self) -> str:
+        renderer = engine_label(self._node.currentEngine()).replace(" ", "")
+        return "Add {}Attributes Set".format(renderer)
+
+    def _sync_add_button(self) -> None:
+        button = getattr(self, "_add_slot_button", None)
+        if button is None or not widget_is_alive(button):
+            return
+        try:
+            button.setText(self._add_button_label())
+            button.setToolTip(
+                "Add an attribute set (max {}).".format(MAX_SLOTS)
+            )
+        except Exception:
+            pass
 
     def _build_slot(self, index: int) -> GafferUI.Widget:
         node = self._node
@@ -165,6 +170,14 @@ class _sdvRenderAttributesWidget(CardNodeWidget):
             )
         )
         header.append(clear)
+        remove = GafferUI.Button("Remove")
+        remove.setToolTip("Remove this attribute set.")
+        self._buttonConnections.append(
+            remove.clickedSignal().connect(
+                functools.partial(self.__onRemoveSlot, index), scoped=True
+            )
+        )
+        header.append(remove)
         body.append(header)
 
         self._addRow(
@@ -259,10 +272,7 @@ class _sdvRenderAttributesWidget(CardNodeWidget):
     def _onPlugDirtied(self, plug: Gaffer.Plug) -> None:
         name = plug.getName()
         if name == "renderEngine":
-            try:
-                self._tabs.setLabel(self._main_tab, self._attributes_tab_name())
-            except Exception:
-                pass
+            self._sync_add_button()
             self.__pending_attr.update(range(1, MAX_SLOTS + 1))
             self.__rebuildAttrLazily()
         elif name == "slotCount":
@@ -302,7 +312,7 @@ class _sdvRenderAttributesWidget(CardNodeWidget):
             if visible:
                 self._sync_path_rows(index)
         self._add_slot_button.setEnabled(count < MAX_SLOTS)
-        self._remove_slot_button.setEnabled(count > 0)
+        self._sync_add_button()
         for index in range(1, MAX_SLOTS + 1):
             self._set_tab_label(index)
 
@@ -377,10 +387,12 @@ class _sdvRenderAttributesWidget(CardNodeWidget):
         with Gaffer.UndoScope(script):
             self._node.addSlot()
 
-    def __onRemoveSlot(self, *unused) -> None:
+    def __onRemoveSlot(self, index: int, *unused) -> None:
         script = self._node.scriptNode()
         with Gaffer.UndoScope(script):
-            self._node.removeSlot()
+            self._node.removeSlot(index)
+        self._syncSlots()
+        self._rebuild_all_attr_tabs()
 
     def __onAddPath(self, index: int, *unused) -> None:
         script = self._node.scriptNode()
@@ -495,6 +507,4 @@ Gaffer.Metadata.registerNode(
     plugs=_plugs,
 )
 
-register_node_icon(
-    sdvRenderAttributes, "renderConfig-gaffer.png", "sdvRenderAttributes.png"
-)
+register_node_icon(sdvRenderAttributes, "sdvRenderAttributes.png")

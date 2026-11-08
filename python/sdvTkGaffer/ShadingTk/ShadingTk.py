@@ -132,6 +132,21 @@ from ._scene import (
     shader_parameter_names,
     with_scene_context,
 )
+from ._osl import (
+    add_osl_plug,
+    add_osl_slot,
+    compile_osl,
+    connect_osl_output,
+    drive_osl_time,
+    ensure_osl_plugs,
+    active_osl_node,
+    load_osl_example,
+    on_osl_plug_set,
+    osl_is_assignable,
+    persist_osl_node,
+    remove_osl_slot,
+    restore_osl_slots,
+)
 
 
 def _is_reserved_child_name(name: str) -> bool:
@@ -163,11 +178,15 @@ def _is_reserved_child_name(name: str) -> bool:
         "textureUseExisting",
         "textureNextToScene",
         "textureOpenCommand",
+        "oslPath",
+        "oslFrameRate",
+        "oslCount",
     ):
         return True
     for prefix in (
         "assign",
         "edit",
+        "osl",
         "sampling",
         "shaderType",
         "shaderName",
@@ -198,7 +217,12 @@ def script_is_loading(node: Gaffer.Node) -> bool:
 
 
 class ShadingTk(SceneInsertMixin, Gaffer.Box):
-    """Assign up to eight Arnold shaders, each with its own PathFilter."""
+    """Assign up to eight Arnold shaders, each with its own PathFilter.
+
+    The scene chain is global assignment, then shaders created or assigned,
+    then OSL. Texture and displacement nodes are added when those maps are set.
+    OSL slots compile through OSLCode, or through oslc into the OSL Path folder.
+    """
 
     def __init__(self, name: str = "ShadingTk"):
         Gaffer.Box.__init__(self, name)
@@ -307,6 +331,7 @@ class ShadingTk(SceneInsertMixin, Gaffer.Box):
         self.addChild(name_prefix)
         self.addChild(name_suffix)
         self.ensureTextureSettingsPlugs()
+        ensure_osl_plugs(self)
         for plug in (
             global_assign,
             global_path,
@@ -447,11 +472,6 @@ class ShadingTk(SceneInsertMixin, Gaffer.Box):
             self._sync_shader_node_name(index)
             self._detach_shader_type_name(index)
 
-        texture = self.getChild(internal_texture(index))
-        if texture is None and not script_is_loading(self):
-            texture = GafferArnold.ArnoldShader(internal_texture(index))
-            self.addChild(texture)
-
         path_filter = self.getChild(internal_filter(index))
         if path_filter is None:
             path_filter = GafferScene.PathFilter(internal_filter(index))
@@ -466,10 +486,6 @@ class ShadingTk(SceneInsertMixin, Gaffer.Box):
         assign["filter"].setInput(path_filter["out"])
         self._connect_shader(index)
 
-        shaded = assign["out"]
-        disp_out = self._ensure_displacement_network(
-            GafferArnold, index, shaded, path_filter
-        )
         slot_switch = self.getChild(internal_switch(index))
         if slot_switch is None:
             slot_switch = Gaffer.Switch(internal_switch(index))
@@ -477,7 +493,7 @@ class ShadingTk(SceneInsertMixin, Gaffer.Box):
             slot_switch.setup(GafferScene.ScenePlug("in"))
             slot_switch["in"].resize(2)
         slot_switch["in"][0].setInput(source)
-        slot_switch["in"][1].setInput(disp_out)
+        slot_switch["in"][1].setInput(assign["out"])
         return slot_switch["out"]
 
     def _ensure_displacement_network(
@@ -527,6 +543,9 @@ class ShadingTk(SceneInsertMixin, Gaffer.Box):
         if not getattr(self, "_ShadingTk__slotsReady", False):
             return
         if self.getChild(name) is not None:
+            return
+        if name.startswith("osl"):
+            ensure_osl_plugs(self)
             return
         if name.startswith("__sampling"):
             if self["samplingEnabled"].getValue():
@@ -681,6 +700,10 @@ class ShadingTk(SceneInsertMixin, Gaffer.Box):
         except Exception:
             pass
         self._rewire_outputs()
+        try:
+            restore_osl_slots(self)
+        except Exception:
+            pass
 
     def _ensure_slots(self, count: int) -> None:
         count = min(max(int(count), 0), MAX_SLOTS)
@@ -697,21 +720,6 @@ class ShadingTk(SceneInsertMixin, Gaffer.Box):
         if self.getChild(internal_assign(index)) is not None:
             self._connect_shader(index)
             self._sync_shader_node_name(index)
-            if self.getChild(internal_disp_switch(index)) is None:
-                try:
-                    import GafferArnold
-
-                    assign = self.getChild(internal_assign(index))
-                    path_filter = self.getChild(internal_filter(index))
-                    slot_switch = self.getChild(internal_switch(index))
-                    if assign is not None and path_filter is not None:
-                        disp_out = self._ensure_displacement_network(
-                            GafferArnold, index, assign["out"], path_filter
-                        )
-                        if slot_switch is not None:
-                            slot_switch["in"][1].setInput(disp_out)
-                except Exception:
-                    pass
             return
         try:
             import GafferArnold
@@ -748,13 +756,116 @@ class ShadingTk(SceneInsertMixin, Gaffer.Box):
                 return switch["out"]
         return self._stage_source()
 
+    def _wire_osl_chain(self, processed: Gaffer.Plug) -> Gaffer.Plug:
+        try:
+            count = int(self["oslCount"].getValue())
+        except Exception:
+            return processed
+        for index in range(1, count + 1):
+            assign = self.getChild("__oslAssign{}".format(index))
+            if assign is None or "in" not in assign or "out" not in assign:
+                continue
+            try:
+                assign["in"].setInput(processed)
+            except Exception:
+                continue
+            processed = assign["out"]
+            disp_assign = self.getChild("__oslDispAssign{}".format(index))
+            if disp_assign is None or "in" not in disp_assign or "out" not in disp_assign:
+                continue
+            try:
+                disp_assign["in"].setInput(processed)
+            except Exception:
+                continue
+            processed = disp_assign["out"]
+        return processed
+
     def _shading_chain_out(self) -> Gaffer.Plug:
-        processed = self._slot_chain_out()
+        """Global assignment, then created and assigned shaders, then OSL."""
+        cursor = self._stage_source()
+        for index in range(1, MAX_SLOTS + 1):
+            switch = self.getChild(internal_switch(index))
+            if switch is not None and "out" in switch:
+                cursor = switch["out"]
         for name in (MIX_SWITCH, MATTE_SWITCH, DIAG_SWITCH):
             switch = self.getChild(name)
-            if switch is not None:
-                processed = switch["out"]
-        return processed
+            if switch is not None and "out" in switch:
+                cursor = switch["out"]
+        for index in range(1, MAX_SLOTS + 1):
+            switch = self.getChild(internal_reassign_switch(index))
+            if switch is not None and "out" in switch:
+                cursor = switch["out"]
+        return self._osl_tail(cursor)
+
+    def _osl_tail(self, cursor: Gaffer.Plug) -> Gaffer.Plug:
+        try:
+            count = int(self["oslCount"].getValue())
+        except Exception:
+            return cursor
+        for index in range(1, count + 1):
+            assign = self.getChild("__oslAssign{}".format(index))
+            if assign is not None and "out" in assign:
+                cursor = assign["out"]
+            disp = self.getChild("__oslDispAssign{}".format(index))
+            if disp is not None and "out" in disp:
+                cursor = disp["out"]
+        return cursor
+
+    def _wire_pass(self, assign_name: str, switch_name: str, source: Gaffer.Plug) -> Gaffer.Plug:
+        assign = self.getChild(assign_name)
+        switch = self.getChild(switch_name)
+        if assign is not None and "in" in assign:
+            try:
+                assign["in"].setInput(source)
+            except Exception:
+                pass
+        if switch is None or "in" not in switch or "out" not in switch:
+            if assign is not None and "out" in assign:
+                return assign["out"]
+            return source
+        try:
+            switch["in"][0].setInput(source)
+            if assign is not None and "out" in assign:
+                switch["in"][1].setInput(assign["out"])
+        except Exception:
+            pass
+        return switch["out"]
+
+    def _wire_slot(self, index: int, source: Gaffer.Plug) -> Gaffer.Plug:
+        assign = self.getChild(internal_assign(index))
+        switch = self.getChild(internal_switch(index))
+        if assign is None and switch is None:
+            return source
+        if assign is not None and "in" in assign:
+            try:
+                assign["in"].setInput(source)
+            except Exception:
+                pass
+        shaded = assign["out"] if assign is not None and "out" in assign else source
+        disp_assign = self.getChild(internal_disp_assign(index))
+        disp_switch = self.getChild(internal_disp_switch(index))
+        if disp_assign is not None and "in" in disp_assign:
+            try:
+                disp_assign["in"].setInput(shaded)
+            except Exception:
+                pass
+        active = shaded
+        if disp_switch is not None and "in" in disp_switch and "out" in disp_switch:
+            try:
+                disp_switch["in"][0].setInput(shaded)
+                if disp_assign is not None and "out" in disp_assign:
+                    disp_switch["in"][1].setInput(disp_assign["out"])
+            except Exception:
+                pass
+            active = disp_switch["out"]
+        if switch is None or "in" not in switch or "out" not in switch:
+            return active
+        try:
+            switch["in"][0].setInput(source)
+            switch["in"][1].setInput(active)
+        except Exception:
+            pass
+        return switch["out"]
 
     def _rewire_outputs(self) -> None:
         scope = self.getChild(EDIT_SCOPE)
@@ -764,55 +875,17 @@ class ShadingTk(SceneInsertMixin, Gaffer.Box):
             except Exception:
                 pass
         incoming = self._incoming_scene()
-        global_assign = self.getChild(GLOBAL_ASSIGN)
-        global_switch = self.getChild(GLOBAL_SWITCH)
-        if global_assign is not None and "in" in global_assign:
-            try:
-                global_assign["in"].setInput(incoming)
-            except Exception:
-                pass
-        if global_switch is not None and "in" in global_switch:
-            try:
-                global_switch["in"][0].setInput(incoming)
-                if global_assign is not None and "out" in global_assign:
-                    global_switch["in"][1].setInput(global_assign["out"])
-            except Exception:
-                pass
-        source = self._stage_source()
-        first_assign = self.getChild(internal_assign(1))
-        first_switch = self.getChild(internal_switch(1))
-        if first_assign is not None and "in" in first_assign:
-            try:
-                first_assign["in"].setInput(source)
-            except Exception:
-                pass
-        if first_switch is not None and "in" in first_switch:
-            try:
-                first_switch["in"][0].setInput(source)
-            except Exception:
-                pass
-        processed = self._slot_chain_out()
+        processed = self._wire_pass(GLOBAL_ASSIGN, GLOBAL_SWITCH, incoming)
+        for index in range(1, MAX_SLOTS + 1):
+            processed = self._wire_slot(index, processed)
         for assign_name, switch_name in (
             (MIX_ASSIGN, MIX_SWITCH),
             (MATTE_ASSIGN, MATTE_SWITCH),
             (DIAG_ASSIGN, DIAG_SWITCH),
         ):
-            assign = self.getChild(assign_name)
-            switch = self.getChild(switch_name)
-            if assign is not None and "in" in assign:
-                try:
-                    assign["in"].setInput(processed)
-                except Exception:
-                    pass
-            if switch is not None and "in" in switch:
-                try:
-                    switch["in"][0].setInput(processed)
-                    if assign is not None and "out" in assign:
-                        switch["in"][1].setInput(assign["out"])
-                    processed = switch["out"]
-                except Exception:
-                    pass
+            processed = self._wire_pass(assign_name, switch_name, processed)
         processed = self._rewire_reassign(processed)
+        processed = self._wire_osl_chain(processed)
         for child_name in (
             SAMPLING_ARNOLD_OPTIONS,
             SAMPLING_CYCLES_OPTIONS,
@@ -980,6 +1053,42 @@ class ShadingTk(SceneInsertMixin, Gaffer.Box):
             return
         self._ensure_slots(count + 1)
         self["slotCount"].setValue(count + 1)
+
+    def ensureOslPlugs(self) -> None:
+        ensure_osl_plugs(self)
+
+    def addOslSlot(self) -> None:
+        add_osl_slot(self)
+
+    def removeOslSlotAt(self, index: int) -> None:
+        remove_osl_slot(self, index)
+
+    def compileOsl(self, index: int) -> str:
+        return compile_osl(self, index)
+
+    def loadOslExample(self, index: int, key: str) -> None:
+        load_osl_example(self, index, key)
+
+    def addOslPlug(self, index: int, name: str, kind: str, output: bool = False) -> None:
+        add_osl_plug(self, index, name, kind, output)
+
+    def connectOslOutput(
+        self,
+        index: int,
+        output: str,
+        slot: int,
+        parameter: str = "",
+        displacement: bool = False,
+    ) -> None:
+        connect_osl_output(self, index, output, slot, parameter, displacement)
+
+    def driveOslTime(self, index: int) -> None:
+        drive_osl_time(self, index)
+
+    def oslShader(self, index: int):
+        if not osl_is_assignable(self, index):
+            return None
+        return active_osl_node(self, index)
 
     def addAssignSlot(self) -> None:
         self.ensureAssignPlugs()
@@ -1736,7 +1845,58 @@ class ShadingTk(SceneInsertMixin, Gaffer.Box):
         key = (key or "").strip()
         if key == "diag":
             return self.diagnosticShader()
+        osl = self._osl_shader_from_key(key)
+        if osl is not None or (key or "").startswith("osl:"):
+            return osl
         return self.shaderFromTextureManagerKey(key)
+
+    def _append_osl_manager_entries(self, entries: list) -> None:
+        try:
+            count = int(self["oslCount"].getValue())
+        except Exception:
+            count = 0
+        seen = {entry.get("key") for entry in entries}
+        for index in range(1, count + 1):
+            key = "osl:{}".format(index)
+            if key in seen:
+                continue
+            shader = self.oslShader(index)
+            if shader is None:
+                continue
+            name = ""
+            try:
+                name = (self["oslName{}".format(index)].getValue() or "").strip()
+            except Exception:
+                name = ""
+            if not name:
+                try:
+                    name = shader.getName()
+                except Exception:
+                    name = key
+            shader_type = "OSL"
+            try:
+                if "name" in shader and shader["name"].getValue():
+                    shader_type = shader["name"].getValue()
+            except Exception:
+                shader_type = "OSL"
+            entries.append(
+                {
+                    "key": key,
+                    "index": index,
+                    "name": name,
+                    "type": shader_type,
+                    "node": shader,
+                }
+            )
+
+    def _osl_shader_from_key(self, key: str):
+        key = (key or "").strip()
+        if not key.startswith("osl:"):
+            return None
+        try:
+            return self.oslShader(int(key.split(":", 1)[1]))
+        except Exception:
+            return None
 
     def shaderManagerSnapshot(self) -> dict:
         """Shaders in connection order, each ending at a texture or itself."""
@@ -1807,6 +1967,7 @@ class ShadingTk(SceneInsertMixin, Gaffer.Box):
                     "node": shader,
                 }
             )
+        self._append_osl_manager_entries(entries)
         optional = (
             ("global", "globalAssign", self.globalShader, ALL_SHADER_NAME),
             ("matte", "matteEnabled", self.matteShader, MATTE_SHADER_NAME),
@@ -1962,6 +2123,7 @@ class ShadingTk(SceneInsertMixin, Gaffer.Box):
                     "node": shader,
                 }
             )
+        self._append_osl_manager_entries(entries)
         extras = (
             ("global", ALL_SHADER_NAME, self.globalShader),
             ("matte", MATTE_SHADER_NAME, self.matteShader),
@@ -3480,10 +3642,18 @@ class ShadingTk(SceneInsertMixin, Gaffer.Box):
         self._connect_displacement(index)
 
     def _load_slot_texture(self, index: int) -> None:
+        tex_name = (self[texture_type_plug(index)].getValue() or "").strip()
         texture = self.slotTexture(index)
         if texture is None:
-            return
-        tex_name = (self[texture_type_plug(index)].getValue() or "").strip()
+            if not tex_name or tex_name.startswith(LIBRARY_PREFIX):
+                self._connect_texture(index)
+                return
+            try:
+                import GafferArnold
+            except Exception:
+                return
+            texture = GafferArnold.ArnoldShader(internal_texture(index))
+            self.addChild(texture)
         if not tex_name or tex_name.startswith(LIBRARY_PREFIX):
             self._connect_texture(index)
             return
@@ -3503,6 +3673,20 @@ class ShadingTk(SceneInsertMixin, Gaffer.Box):
             kind = (self[displacement_type_plug(index)].getValue() or "").strip()
         except Exception:
             kind = ""
+        if kind and self.getChild(internal_disp_switch(index)) is None:
+            assign = self.getChild(internal_assign(index))
+            path_filter = self.getChild(internal_filter(index))
+            if assign is not None and path_filter is not None:
+                try:
+                    import GafferArnold
+
+                    self._ensure_displacement_network(
+                        GafferArnold, index, assign["out"], path_filter
+                    )
+                    if not script_is_loading(self):
+                        self._rewire_outputs()
+                except Exception:
+                    pass
         disp_map = self.slotDispMap(index)
         if disp_map is not None and kind and not kind.startswith(LIBRARY_PREFIX):
             try:
@@ -3690,6 +3874,8 @@ class ShadingTk(SceneInsertMixin, Gaffer.Box):
                     self._sync_driven_plugs()
 
     def _apply_plug_set(self, plug: Gaffer.Plug) -> None:
+        if on_osl_plug_set(self, plug):
+            return
         name = plug.getName()
         if name == "slotCount":
             try:
@@ -3866,7 +4052,8 @@ Gaffer.Metadata.registerNode(
     ShadingTk,
     "description",
     "Assigns up to eight Arnold shaders, or edits one existing surface "
-    "shader through an EditScope. Slots start empty — add one when "
+    "shader through an EditScope. OSL slots compile through OSLCode or oslc. "
+    "Slots start empty — add one when "
     "you need it. Prim paths are applied when you edit them.",
 )
 
@@ -3877,7 +4064,11 @@ class _ShadingTkSerialiser(BoxNetworkSerialiser):
     def childNeedsConstruction(
         self, child: Gaffer.GraphComponent, serialisation: Gaffer.Serialisation
     ) -> bool:
-        if persist_sampling_node(child) or persist_internal_shader_node(child):
+        if (
+            persist_sampling_node(child)
+            or persist_internal_shader_node(child)
+            or persist_osl_node(child)
+        ):
             return True
         if child.getName() in (TEXTURES_BOX, EDIT_SCOPE):
             return True
@@ -3891,8 +4082,10 @@ class _ShadingTkSerialiser(BoxNetworkSerialiser):
         if isinstance(child, Gaffer.Node):
             if child.getName() in (TEXTURES_BOX, EDIT_SCOPE):
                 return True
-            return persist_internal_shader_node(child) or persist_sampling_node(
-                child
+            return (
+                persist_internal_shader_node(child)
+                or persist_sampling_node(child)
+                or persist_osl_node(child)
             )
         return super().childNeedsSerialisation(child, serialisation)
 

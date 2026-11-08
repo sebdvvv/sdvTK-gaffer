@@ -1,4 +1,4 @@
-"""Node Editor card for ArnoldPhysicalSky — Light / Transform / UV / Prim Path / Arnold / Light Linking / Viz."""
+"""Node Editor card for ArnoldPhysicalSky — Light / Transform / UV / Prim Path / Arnold / Light Linking / Sampling / Viz."""
 
 from __future__ import annotations
 
@@ -34,7 +34,15 @@ SKY_CYAN = imath.Color3f(72 / 255, 168 / 255, 230 / 255)
 # Light-tab order overrides (plug names on the skydome / physical_sky shader).
 _AFTER_NAME = ("intensity", "exposure")
 _AFTER_SKY_TINT = ("shadow_density", "shadow_color")
-_INLINE_SHADER_BOOLS = ("sun", "sky")
+_INLINE_SHADER_BOOLS = ("sun", "sky", "enable_sun", "enable_sky")
+_SUN_SKY_BOOLS = (("enable_sun", "sun"), ("enable_sky", "sky"))
+_SUN_SKY_LABELS = {
+    "enable_sun": "Enable Sun",
+    "sun": "Enable Sun",
+    "enable_sky": "Enable Sky",
+    "sky": "Enable Sky",
+}
+_SAMPLING_PARAMETERS = ("volume_samples", "sampling_mode", "resolution")
 _HIDDEN_PARAM_NAMES = frozenset(
     {"out", "type", "name", "shader", "attributeSuffix"}
 )
@@ -151,13 +159,20 @@ class _EnvSkyWidget(CardNodeWidget):
         light_form = self._tab_form()
         self._add_tab(tabs, self._scroll(light_form), "Light")
 
-        type_row = self._addRow(
+        self._addRow(
             light_form,
             "Env Light Type",
             GafferUI.PresetsPlugValueWidget(node["skyType"]),
             name="skyType",
         )
-        self._addInlineShaderBools(type_row, node)
+        self._addPairedFields(
+            light_form,
+            (
+                ("Label", native_widget(node["label"]), "label"),
+                ("Name", native_widget(node["name"]), "name"),
+            ),
+        )
+        self._addSunSkyRow(light_form, node)
 
         split_ready = node.splitAvailable()
         self._addRow(
@@ -183,18 +198,6 @@ class _EnvSkyWidget(CardNodeWidget):
             )
             light_form.append(self._buildSplitSection(node))
 
-        self._addRow(
-            light_form,
-            "Label",
-            native_widget(node["label"]),
-            name="label",
-        )
-        self._addRow(
-            light_form,
-            "Prim Name",
-            native_widget(node["name"]),
-            name="name",
-        )
         self._addNamedLightParams(light_form, node, _AFTER_NAME)
 
         xform_form = self._tab_form()
@@ -244,8 +247,34 @@ class _EnvSkyWidget(CardNodeWidget):
                 name="link:{}".format(plug.getName()),
             )
 
+        sampling_form = self._tab_form()
+        self._add_tab(tabs, self._scroll(sampling_form), "Sampling")
+        sampling_plugs = {
+            plug.getName(): plug for plug in node.parameterPlugs()
+        }
+        for name in _SAMPLING_PARAMETERS:
+            plug = sampling_plugs.get(name)
+            if plug is None:
+                continue
+            self._addLightParamRow(
+                sampling_form,
+                plug,
+                "sampling",
+                label={
+                    "volume_samples": "Volume Samples",
+                    "sampling_mode": "Sampling Mode",
+                    "resolution": "Resolution",
+                }.get(name),
+            )
+
         vis_form = self._tab_form()
         self._add_tab(tabs, self._scroll(vis_form), "Viz")
+        self._addRow(
+            vis_form,
+            "GL Drawing Mode",
+            GafferUI.PresetsPlugValueWidget(node["glDrawingMode"]),
+            name="glDrawingMode",
+        )
         for plug in node.visualisationPlugs():
             widget = _plug_widget(plug)
             if widget is None:
@@ -312,19 +341,14 @@ class _EnvSkyWidget(CardNodeWidget):
             name = plug.getName()
             if name in _AFTER_NAME or name in placed_light:
                 continue
+            if name in _SAMPLING_PARAMETERS:
+                continue
             if name in UV_PARAMETERS or _uv_section(plug):
                 self._addLightParamRow(uv_form, plug, "uv")
             elif name in CONTRIBUTION_PARAMETERS:
                 self._addLightParamRow(arnold_form, plug, "contrib")
             else:
                 self._addLightParamRow(light_form, plug, "param")
-
-        self._addRow(
-            light_form,
-            "GL Drawing",
-            GafferUI.PresetsPlugValueWidget(node["glDrawingMode"]),
-            name="glDrawingMode",
-        )
 
         self._syncTypeRows()
         self._syncModeRows()
@@ -427,6 +451,65 @@ class _EnvSkyWidget(CardNodeWidget):
         except Exception:
             pass
 
+    def _addPairedFields(self, form: GafferUI.Widget, specs: tuple) -> None:
+        """Two labelled fields on one row. Each ``spec`` is label, widget, row name."""
+        row = GafferUI.ListContainer(
+            GafferUI.ListContainer.Orientation.Horizontal, spacing=16
+        )
+        for label, widget, row_name in specs:
+            if widget is None:
+                continue
+            cell = GafferUI.ListContainer(
+                GafferUI.ListContainer.Orientation.Horizontal, spacing=8
+            )
+            caption = GafferUI.Label(label)
+            try:
+                caption._qtWidget().setFixedWidth(72)
+            except Exception:
+                pass
+            cell.append(caption)
+            expand_h(widget)
+            cell.append(widget, expand=True)
+            expand_h(cell)
+            row.append(cell, expand=True)
+            self._rows[row_name] = (cell, widget)
+        form.append(row)
+
+    def _addSunSkyRow(self, form: GafferUI.Widget, node: Gaffer.Node) -> None:
+        """Enable Sun and Enable Sky, one pair per sky shader that has them."""
+        for sky_type, _label in ARNOLD_SKY_TYPES:
+            named = {
+                plug.getName(): plug
+                for plug in node.shaderParameterPlugs(sky_type)
+            }
+            chosen = []
+            for names in _SUN_SKY_BOOLS:
+                plug = None
+                for name in names:
+                    plug = named.get(name)
+                    if plug is not None:
+                        break
+                if plug is not None:
+                    chosen.append(plug)
+            if not chosen:
+                continue
+            row = GafferUI.ListContainer(
+                GafferUI.ListContainer.Orientation.Horizontal, spacing=16
+            )
+            for plug in chosen:
+                widget = GafferUI.BoolPlugValueWidget(plug)
+                try:
+                    widget.boolWidget().setText(
+                        _SUN_SKY_LABELS.get(plug.getName(), _param_label(plug))
+                    )
+                except Exception:
+                    pass
+                expand_h(widget)
+                row.append(widget, expand=True)
+            expand_h(row)
+            form.append(row)
+            self._rows["shader:{}:sunSky".format(sky_type)] = (row, row)
+
     def _addInlineShaderBools(
         self,
         type_row: GafferUI.ListContainer,
@@ -440,24 +523,35 @@ class _EnvSkyWidget(CardNodeWidget):
             else:
                 plugs = node.sideShaderParameterPlugs(side, sky_type)
             named = {plug.getName(): plug for plug in plugs}
-            for name in _INLINE_SHADER_BOOLS:
-                plug = named.get(name)
-                if plug is None:
-                    continue
+            seen = set()
+            ordered = []
+            for names in _SUN_SKY_BOOLS:
+                for name in names:
+                    plug = named.get(name)
+                    if plug is None or plug.getName() in seen:
+                        continue
+                    seen.add(plug.getName())
+                    ordered.append(plug)
+                    break
+            for plug in ordered:
                 widget = _plug_widget(plug)
                 if widget is None:
                     continue
                 cell = GafferUI.ListContainer(
                     GafferUI.ListContainer.Orientation.Horizontal, spacing=4
                 )
-                cell.append(GafferUI.Label(_param_label(plug)))
+                cell.append(
+                    GafferUI.Label(
+                        _SUN_SKY_LABELS.get(plug.getName(), _param_label(plug))
+                    )
+                )
                 cell.append(widget)
                 type_row.append(cell)
                 if side is None:
-                    row_name = "shader:{}:{}".format(sky_type, name)
+                    row_name = "shader:{}:{}".format(sky_type, plug.getName())
                 else:
                     row_name = "split:{}:shader:{}:{}".format(
-                        side, sky_type, name
+                        side, sky_type, plug.getName()
                     )
                 self._rows[row_name] = (cell, widget)
 
@@ -479,16 +573,28 @@ class _EnvSkyWidget(CardNodeWidget):
         form: GafferUI.ListContainer,
         plug: Gaffer.Plug,
         prefix: str,
+        label: str | None = None,
     ) -> None:
         widget = _plug_widget(plug)
         if widget is None:
             return
-        self._addRow(
-            form,
-            _param_label(plug),
-            widget,
-            name="{}:{}".format(prefix, plug.getName()),
+        row_name = "{}:{}".format(prefix, plug.getName())
+        if not label:
+            self._addRow(form, _param_label(plug), widget, name=row_name)
+            return
+        row = GafferUI.ListContainer(
+            GafferUI.ListContainer.Orientation.Horizontal, spacing=8
         )
+        caption = GafferUI.Label(label)
+        try:
+            caption._qtWidget().setFixedWidth(self._LABEL_W)
+        except Exception:
+            pass
+        row.append(caption)
+        expand_h(widget)
+        row.append(widget, expand=True)
+        form.append(row)
+        self._rows[row_name] = (row, widget)
 
     def _onPlugDirtied(self, plug: Gaffer.Plug) -> None:
         name = plug.getName()

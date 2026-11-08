@@ -1,0 +1,24 @@
+#include "stdosl.h"
+#include "noise_lib.h"
+
+shader animated_displacement(
+    float Time = 0,
+    float Scale = 1.5,        // keep equal to the surface shader
+    float Speed = 0.25,       // keep equal to the surface shader
+    float WarpAmount = 0.6,   // keep equal to the surface shader
+    float Height = 0.1,
+    output float Displacement = 0
+)
+{
+    point p = P * Scale;
+    float t = Time * Speed;
+
+    vector w = vector(
+        fbm(p, t, 3),
+        fbm(p + vector(5.2, 1.3, 2.7), t, 3),
+        fbm(p + vector(9.1, 4.7, 0.3), t, 3)
+    );
+    float n = fbm(p + w * WarpAmount, t, 4);
+
+    Displacement = n * Height;
+}
