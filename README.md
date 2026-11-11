@@ -5,7 +5,8 @@ This is an open-source contribution to [Gaffer](https://github.com/GafferHQ/gaff
 
 One toolkit for lighting, shading, and render settings. Install this repo instead of the separate node packages.
 
-<img width="1206" height="403" alt="gaffer_2026-11-07_12-24-30" src="https://github.com/user-attachments/assets/8c8a1a1d-7da6-4042-8522-b6aeda22ef0e" />
+<img width="1321" height="481" alt="gaffer_2026-11-11_21-06-49" src="https://github.com/user-attachments/assets/a83d8cb4-5678-43d9-ae3e-16badea0b04a" />
+
 
 `ShadingTk`, `sdvRenderSettings`, and `sdvRenderAttributes` support Arnold, RenderMan, and Cycles. 
 
