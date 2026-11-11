@@ -3,9 +3,11 @@
 Writes the scene to USD renderable stage.
 Includes UsdRender settings, products,, vars, lights and primvars translated from Gaffer's render globals.
 
-<img width="573" height="395" alt="gaffer_2026-11-11_21-39-19" src="https://github.com/user-attachments/assets/e0338a43-1da1-48b2-9e3f-b4942648cc45" />
 
-<img width="1192" height="195" alt="gaffer_2026-11-11_21-40-53" src="https://github.com/user-attachments/assets/7dadcaf9-12f3-43c4-9c5a-13a72e16846d" />
+
+<img width="573" height=auto alt="gaffer_2026-11-11_21-40-53" src="https://github.com/user-attachments/assets/7dadcaf9-12f3-43c4-9c5a-13a72e16846d" />
+
+<img width="573" height="395" alt="gaffer_2026-11-11_21-39-19" src="https://github.com/user-attachments/assets/e0338a43-1da1-48b2-9e3f-b4942648cc45" />
 
 **Render → sdvUSDWriter.** One scene input. **Frames** is Current Frame, Full Range (the script timeline), or Custom Range. **Write USD** dispatches the scene write for those frames. **USD Write All** writes that scene and then authors the render settings, products, and vars. A LocalDispatcher in the graph is not required. Evaluating the scene does not write the file. **out** passes the scene through and stays hidden.
 
