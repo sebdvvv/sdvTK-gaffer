@@ -56,7 +56,12 @@ Closing a script that still has unsaved changes asks **Cancel | Discard | Save**
 
 **sdvTk → Options** saves preferences in `~/gaffer/sdvtk_prefs.json`.
 
-**sdvTk → Show Shelf** and **sdvTk → Hide Shelf** show or hide the shelf.
+- **Double-click enters content nodes** — double-click a Box, Reference, or EditScope to open its contents.
+- **Navigate node contents through a single pane** — that navigation stays in the current Graph Editor.
+- **Ctrl + Double-click opens Node editor panels** — Ctrl+double-click opens a Node Editor for the node.
+- **Graph View right-click menu has navigation** — the graph menu includes back (◀) and root (/).
+- **Scene Hierarchy: browse without retriggering the Viewer** — expand and collapse in the Hierarchy View while the Viewer keeps its Visible Set.
+- **Replace the Python Editor with [pw_MultiScriptEditor](https://github.com/sebdvvv/pw_MultiScriptEditor)** — set the folder that contains `multi_script_editor`. The next launch adds it to `PYTHONPATH` and docks that editor under the Graph Editor.
 
 ---
 
@@ -69,10 +74,3 @@ On first launch, sdvTk copies the shelf to `~/gaffer/shelves` when `sdvTk.json` 
 The default buttons are Context, Forced Geometry, and the node connection tools on the left, and About at the far right.
 
 Drop Python onto the shelf, or right-click it and choose **Add Action/Menu to shelf**. The dialog saves that code as a button or a menu on the local shelf.
-
-- **Double-click enters content nodes** — double-click a Box, Reference, or EditScope to open its contents.
-- **Navigate node contents through a single pane** — that navigation stays in the current Graph Editor.
-- **Ctrl + Double-click opens Node editor panels** — Ctrl+double-click opens a Node Editor for the node.
-- **Graph View right-click menu has navigation** — the graph menu includes back (◀) and root (/).
-- **Scene Hierarchy: browse without retriggering the Viewer** — expand and collapse in the Hierarchy View while the Viewer keeps its Visible Set.
-- **Replace the Python Editor with [pw_MultiScriptEditor](https://github.com/sebdvvv/pw_MultiScriptEditor)** — set the folder that contains `multi_script_editor`. The next launch adds it to `PYTHONPATH` and docks that editor under the Graph Editor.
