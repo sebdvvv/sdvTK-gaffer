@@ -1,0 +1,57 @@
+{
+  "name": "sdvTk",
+  "label": "sdvTk",
+  "order": 0,
+  "actions": [
+    {
+      "id": "gaffer_scene_context",
+      "label": "Context",
+      "tooltip": "Print this script's context (frame, shot variables, and the rest).\nNo selection needed.",
+      "icon": "gfcontext.png",
+      "command": "from sdvTkGafferUI.GafferShelfUI.context import print_script_contexts\nprint_script_contexts(scriptNode)"
+    },
+    {
+      "id": "bbox_toggle",
+      "label": "Forced Geo",
+      "tooltip": "Force Viewers to show real geometry instead of bounding boxes.\nClick to turn on or off. The menu sets the expansion depth.\nNo selection needed.",
+      "icon": "visu.png",
+      "builtin": "forced_geometry"
+    },
+    {
+      "id": "connect_node",
+      "label": "Connect Nodes",
+      "tooltip": "Connect, disconnect, insert, or merge the selected nodes.",
+      "icon": "node_conn.png",
+      "hold": [
+        {
+          "id": "connect",
+          "label": "Connect",
+          "tooltip": "Wire nodes in selection order (out to in).\nSelect 2 to 10 nodes in the order to link them.",
+          "icon": "node_conn.png",
+          "command": "from sdvTkGafferUI.GafferShelfUI import connect\nconnect.connect_nodes(scriptNode)"
+        },
+        {
+          "id": "disconnect",
+          "label": "Disconnect",
+          "tooltip": "Cut connections.\n1 node: isolate it.\n2 or more: remove links between the selection, including through a Dot.",
+          "icon": "node_disconn.png",
+          "command": "from sdvTkGafferUI.GafferShelfUI import connect\nconnect.disconnect_nodes(scriptNode)"
+        },
+        {
+          "id": "insert_between",
+          "label": "Insert Between",
+          "tooltip": "Place a node between two others.\nSelect upstream, then downstream, then the node to insert.",
+          "icon": "node_insert.png",
+          "command": "from sdvTkGafferUI.GafferShelfUI import connect\nconnect.insert_between(scriptNode)"
+        },
+        {
+          "id": "merge_scenes",
+          "label": "Merge Scenes",
+          "tooltip": "Create a MergeScenes and connect each selected scene output.\nSelect 2 or more scene nodes. Order is in[0], in[1], and so on.",
+          "icon": "merge.png",
+          "command": "from sdvTkGafferUI.GafferShelfUI import connect\nconnect.merge_scenes(scriptNode)"
+        }
+      ]
+    }
+  ]
+}

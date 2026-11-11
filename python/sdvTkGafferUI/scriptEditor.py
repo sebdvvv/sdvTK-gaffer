@@ -10,6 +10,7 @@ The package is https://github.com/sebdvvv/pw_MultiScriptEditor.
 
 from __future__ import annotations
 
+import gc
 import os
 import sys
 
@@ -227,8 +228,6 @@ def _install_under_graph() -> None:
         QtCore.QTimer.singleShot(0, lambda: attempt(0))
 
     GafferUI.ScriptWindow.instanceCreatedSignal().connect(_on_window, scoped=False)
-    try:
-        for window in GafferUI.ScriptWindow.instances():
+    for window in gc.get_objects():
+        if isinstance(window, GafferUI.ScriptWindow):
             _on_window(window)
-    except Exception:
-        pass

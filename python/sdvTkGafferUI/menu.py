@@ -148,11 +148,12 @@ def _feature_html() -> str:
   <li>Python Editor (from pw_MultiScriptEditor — MIT License)
     (<a href="{mse}" style="color:#ffaa00;">github</a>) — optional; the folder below is applied at startup</li>
   <li>ShadingTk Manager (Shaders and Textures)</li>
+  <li>Shelf: Context, Forced Geometry, node connections, and About</li>
 </ul>
 <p style="margin:10px 0 4px 0;"><b>UI tweaks</b></p>
 <ul style="margin:0; padding-left:18px; line-height:1.5;">
   <li>Arnold Viewer Shading / Lighting / Textures: Full as default</li>
-  <li>Unsaved-changes dialog: Cancel | Discard | Save</li>
+  <li>Unsaved-changes dialog: Cancel | Discard | Save (Discard is the middle button)</li>
   <li>Optional: Hierarchy View browse without retriggering the Viewer</li>
   <li>Hierarchy View: Select Shaders assigned to primitive</li>
 </ul>

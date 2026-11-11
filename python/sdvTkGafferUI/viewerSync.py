@@ -8,6 +8,8 @@ script wins. When none remain, those toggles return to their defaults.
 
 from __future__ import annotations
 
+import gc
+
 import Gaffer
 import GafferUI
 
@@ -52,10 +54,7 @@ def install(application=None) -> None:
 
 
 def _windows():
-    try:
-        return list(GafferUI.ScriptWindow.instances())
-    except Exception:
-        return []
+    return [o for o in gc.get_objects() if isinstance(o, GafferUI.ScriptWindow)]
 
 
 def _on_window(window) -> None:
