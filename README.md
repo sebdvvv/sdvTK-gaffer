@@ -1,7 +1,7 @@
 
 # sdvTK-gaffer
 
-This is an open-source contribution to [Gaffer](https://github.com/GafferHQ/gaffer), for anyone who wants a quick, production-shaped Arnold lighting workflow instead of wiring stock nodes by hand. It is designed around production-standard requirements, including a single node that provides every element needed for natural sky lighting.
+This is an open-source contribution to [Gaffer](https://github.com/GafferHQ/gaffer), for anyone who wants a quick, production-shaped  lighting/shading workflow It is designed around production-standard requirements, including a single node that provides every element needed for natural sky lighting.
 
 One toolkit for lighting, shading, and render settings. Install this repo instead of the separate node packages.
 
