@@ -19,11 +19,6 @@ One toolkit for lighting, shading, and render settings. Install this repo instea
 | `sdvRenderAttributes` | MeshType and renderer attribute sets | **Render → sdvRenderAttributes** | [sdvRenderAttributes](docs/sdvRenderAttributes/README.md) |
 | `sdvUSDWriter` | Scene USD plus render settings, products, and vars | **Render → sdvUSDWriter** | [sdvUSDWriter](docs/sdvUSDWriter/README.md) |
 
-**Help** on a node opens that node's README in a browser.
-
-Gaffer type names stay the same (`ArnoldLight.ArnoldLight`, and the same pattern for the others), so existing `.gfr` scripts keep loading.
-
-Drop any of them on a scene connection. **In** is the top plug, **out** is the bottom. Disable the node and the scene passes through unchanged.
 
 Tested on **Gaffer 1.7.5** and **Arnold 1.7.5.4**.
 
