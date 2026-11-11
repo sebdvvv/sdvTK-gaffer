@@ -15,6 +15,7 @@ NODE_READMES = (
     "ShadingTk",
     "sdvRenderSettings",
     "sdvRenderAttributes",
+    "sdvUSDWriter",
 )
 
 

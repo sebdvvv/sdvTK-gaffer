@@ -22,6 +22,7 @@ from sdvTkGaffer import (  # noqa: E402
     ShadingTk,
     sdvRenderAttributes,
     sdvRenderSettings,
+    sdvUSDWriter,
 )
 
 
@@ -36,6 +37,7 @@ for _path, _cls, _search in (
     ("/Arnold/ShadingTk", ShadingTk, "ShadingTk"),
     ("/Render/sdvRenderSettings", sdvRenderSettings, "sdvRenderSettings"),
     ("/Render/sdvRenderAttributes", sdvRenderAttributes, "sdvRenderAttributes"),
+    ("/Render/sdvUSDWriter", sdvUSDWriter, "sdvUSDWriter USD"),
 ):
     node_menu.append(path=_path, nodeCreator=_creator(_cls), searchText=_search)
 

@@ -16,6 +16,7 @@ One toolkit for lighting, shading, and render settings. Install this repo instea
 | `ShadingTk` | Assign, mix, texture, and edit shaders | **Arnold → ShadingTk** | [ShadingTk](docs/ShadingTk/README.md) |
 | `sdvRenderSettings` | Renderer options | **Render → sdvRenderSettings** | [sdvRenderSettings](docs/sdvRenderSettings/README.md) |
 | `sdvRenderAttributes` | MeshType and renderer attribute sets | **Render → sdvRenderAttributes** | [sdvRenderAttributes](docs/sdvRenderAttributes/README.md) |
+| `sdvUSDWriter` | Scene USD plus render settings, products, and vars | **Render → sdvUSDWriter** | [sdvUSDWriter](docs/sdvUSDWriter/README.md) |
 
 **Help** on a node opens that node's README in a browser.
 
