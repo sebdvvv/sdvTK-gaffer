@@ -54,7 +54,7 @@ Middle-click a layout tab to close it (Graph Editor, Viewer, and the other edito
 
 Closing a script that still has unsaved changes asks **Cancel | Discard | Save**. Discard is the middle button.
 
-A shelf sits under the menu bar. The shipped shelf is one tab: Context, Forced Geometry, and the node connection tools on the left, and About at the far right. Extra shelves are JSON under `python/sdvTkGafferUI/GafferShelfUI/shelves`, with icons in `icons/shelf`. Shelves you add yourself are stored in `~/gaffer/sdvtk/shelves`.
+A shelf sits under the menu bar. On first launch it is copied to `~/gaffer/shelves` when that shelf is not already there, and Gaffer reads that local copy. The default tab is Context, Forced Geometry, and the node connection tools on the left, and About at the far right. Drop Python onto the shelf, or right-click it and choose Add Action/Menu to shelf, to add a button. Icons live in `~/gaffer/shelves/icons`.
 
 **sdvTk → Options** saves preferences in `~/gaffer/sdvtk_prefs.json`.
 

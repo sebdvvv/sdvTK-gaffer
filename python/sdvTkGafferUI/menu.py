@@ -1,4 +1,4 @@
-"""sdvTk menu: Options, Shader Manager, Texture Manager, About."""
+"""sdvTk menu: Options, shelf visibility, managers, About."""
 
 from __future__ import annotations
 
@@ -36,6 +36,23 @@ def install(application=None) -> None:
         "/sdvTk/Options",
         {"command": _open_options, "description": "sdvTk preferences"},
     )
+    menu.append("/sdvTk/ShelfDivider", {"divider": True})
+    menu.append(
+        "/sdvTk/Show Shelf",
+        {
+            "command": _show_shelf,
+            "active": _show_shelf_active,
+            "description": "Show the shelf under the menu bar",
+        },
+    )
+    menu.append(
+        "/sdvTk/Hide Shelf",
+        {
+            "command": _hide_shelf,
+            "active": _hide_shelf_active,
+            "description": "Hide the shelf",
+        },
+    )
     menu.append(
         "/sdvTk/Shader Manager",
         {
@@ -63,11 +80,47 @@ def install(application=None) -> None:
     )
 
 
-def _script_from_menu(menu):
+def _window_from_menu(menu):
     try:
-        window = menu.ancestor(GafferUI.ScriptWindow)
+        return menu.ancestor(GafferUI.ScriptWindow)
     except Exception:
-        window = None
+        return None
+
+
+def _show_shelf_active(menu):
+    window = _window_from_menu(menu)
+    if window is None:
+        return False
+    from sdvTkGafferUI.GafferShelfUI import shelf
+    return not shelf.shelf_is_shown(window)
+
+
+def _hide_shelf_active(menu):
+    window = _window_from_menu(menu)
+    if window is None:
+        return False
+    from sdvTkGafferUI.GafferShelfUI import shelf
+    return shelf.shelf_is_shown(window)
+
+
+def _show_shelf(menu):
+    window = _window_from_menu(menu)
+    if window is None:
+        return
+    from sdvTkGafferUI.GafferShelfUI import shelf
+    shelf.show_shelf(window)
+
+
+def _hide_shelf(menu):
+    window = _window_from_menu(menu)
+    if window is None:
+        return
+    from sdvTkGafferUI.GafferShelfUI import shelf
+    shelf.hide_shelf(window)
+
+
+def _script_from_menu(menu):
+    window = _window_from_menu(menu)
     if window is None:
         return None
     try:

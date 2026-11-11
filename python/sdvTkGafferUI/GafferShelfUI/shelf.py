@@ -6,15 +6,15 @@ Installed via ``startup/gui/sdvTk.py``.
 The shipped shelf is one tab, ``sdvTk``. Its buttons are Context, Forced
 Geometry, and the node connection tools. About sits at the far right.
 
-Extra shelves are JSON, merged the same way as the studio shelf:
+The shelf Gaffer uses lives in the user folder. On first launch the
+shipped ``sdvTk`` shelf is copied there when that file is missing:
 
-    <GafferShelfUI>/shelves/<TabName>.json
-    <repo>/icons/shelf/
+    %HOMEDRIVE%%HOMEPATH%/gaffer/shelves/<TabName>.json
+    %HOMEDRIVE%%HOMEPATH%/gaffer/shelves/icons/
+    %HOMEDRIVE%%HOMEPATH%/gaffer/shelves/actions/
 
-User shelves (merged on top of the shared tab, by name and action id):
-    %HOMEDRIVE%%HOMEPATH%/gaffer/sdvtk/shelves/<TabName>.json
-    %HOMEDRIVE%%HOMEPATH%/gaffer/sdvtk/shelves/icons/
-    %HOMEDRIVE%%HOMEPATH%/gaffer/sdvtk/shelves/actions/
+The copy under ``GafferShelfUI/shelves`` and ``icons/shelf`` is only the
+template for that first copy.
 
 Local shelves can also be created from the tab selector menu
 ("Create My Shelf (Local)") via a small Maya-like tool editor that
@@ -153,7 +153,7 @@ def _homepath_root():
 
 
 def user_shelves_dir():
-    return os.path.join(_homepath_root(), "gaffer", "sdvtk", "shelves")
+    return os.path.join(_homepath_root(), "gaffer", "shelves")
 
 
 def ensure_user_shelves_dir():
@@ -164,6 +164,27 @@ def ensure_user_shelves_dir():
     except OSError as e:
         print("[Shelf] Could not create user shelves dir %s: %s" % (path, e))
     return path
+
+
+def ensure_local_shelf():
+    """Copy the shipped shelf into ``~/gaffer/shelves`` when it is not there yet."""
+    ensure_user_shelves_dir()
+    dest = user_shelf_json_path("sdvTk")
+    src = os.path.join(shared_shelves_dir(), "sdvTk.json")
+    if not os.path.isfile(dest) and os.path.isfile(src):
+        shutil.copy2(src, dest)
+        print("[Shelf] Copied default shelf to %s" % dest)
+
+    src_icons = shared_icons_dir()
+    dst_icons = user_icons_dir()
+    if not os.path.isdir(src_icons):
+        return dest
+    for name in os.listdir(src_icons):
+        src_path = os.path.join(src_icons, name)
+        dst_path = os.path.join(dst_icons, name)
+        if os.path.isfile(src_path) and not os.path.isfile(dst_path):
+            shutil.copy2(src_path, dst_path)
+    return dest
 
 
 def user_shelf_json_path(shelf_name):
@@ -367,7 +388,7 @@ SHARED_RIGHT_SHELF_ACTIONS = (
         "id": "about_sdvtk",
         "label": "About",
         "tooltip": "About sdvTk",
-        "icon": "about_gfpipe.png",
+        "icon": "about_sdvTk.png",
         "builtin": "about_pipeline",
         "align": "right",
     },
@@ -567,19 +588,10 @@ def _discover_shelf_files(directory):
 
 
 def load_all_shelves():
-    """Load shared then user shelves. Returns ordered list of shelf dicts."""
+    """Load shelves from ``~/gaffer/shelves``. The shipped shelf is copied there first."""
+    ensure_local_shelf()
     shelves = {}
-    shared_dir = shared_shelves_dir()
-
-    for path in _discover_shelf_files(shared_dir):
-        try:
-            data = _load_json(path)
-            shelf = _normalize_shelf(data, os.path.dirname(path), path)
-            shelves[shelf["name"]] = shelf
-        except Exception as e:
-            print("[Shelf] Failed to load %s: %s" % (path, e))
-
-    user_dir = ensure_user_shelves_dir()
+    user_dir = user_shelves_dir()
     for path in _discover_shelf_files(user_dir):
         try:
             data = _load_json(path)
@@ -597,7 +609,7 @@ def load_all_shelves():
     result.sort(key=lambda s: (s.get("order", 100), s.get("name", "")))
 
     if not result:
-        print("[Shelf] No shelf JSON found in %s or %s" % (shared_dir, user_dir))
+        print("[Shelf] No shelf JSON found in %s" % user_dir)
     return result
 
 
@@ -1442,7 +1454,7 @@ def _build_about_pipeline_button(parent, scriptNode, shelf, shelf_state, defn=No
     """Far-right About button. Opens the same dialog as sdvTk > About."""
     btn = QToolButton(parent)
     _square_shelf_button(btn)
-    icon_name = (defn or {}).get("icon") or "about_gfpipe.png"
+    icon_name = (defn or {}).get("icon") or "about_sdvTk.png"
     icon = resolve_icon(icon_name, shelf, btn)
     if not icon.isNull():
         btn.setIcon(icon)
@@ -1475,7 +1487,7 @@ BUILTINS = {
 
 # Short codes shown on the single active tab button (Maya-style).
 TAB_SHORT = {
-    "sdvTk": "SDV",
+    "sdvTk": "GAF",
     "General": "GEN",
     "Lookdev": "LDV",
     "Lighting": "LGT",
@@ -2327,6 +2339,230 @@ class _TabSelector(QWidget):
         self._refresh_button()
 
 
+def _code_from_mime(mime):
+    """Python text from a drop, or None when the drop is not code."""
+    if mime is None:
+        return None
+    if mime.hasText():
+        return mime.text()
+    if mime.hasUrls():
+        chunks = []
+        for url in mime.urls():
+            path = url.toLocalFile()
+            if not path or not os.path.isfile(path):
+                continue
+            if os.path.splitext(path)[1].lower() not in (".py", ".txt"):
+                continue
+            try:
+                with open(path, "r", encoding="utf-8") as handle:
+                    chunks.append(handle.read())
+            except Exception:
+                continue
+        if chunks:
+            return "\n\n".join(chunks)
+    return None
+
+
+class _AddActionDialog(QDialog):
+    """Create one shelf button, or one menu button, from Python code."""
+
+    def __init__(self, parent=None, command=""):
+        super(_AddActionDialog, self).__init__(parent)
+        self.setWindowTitle("Add Action/Menu to shelf")
+        self.resize(640, 460)
+        self.setMinimumSize(520, 360)
+        self.setStyleSheet(EDITOR_STYLE)
+        self._menu_items = []
+        self._suppress = False
+
+        root = QVBoxLayout(self)
+        root.setContentsMargins(12, 12, 12, 12)
+        root.setSpacing(8)
+
+        form = QFormLayout()
+        form.setSpacing(8)
+        self.name_edit = QLineEdit()
+        self.name_edit.setPlaceholderText("Tool name")
+        form.addRow("Name", self.name_edit)
+
+        self.type_combo = QComboBox()
+        self.type_combo.addItem("Button", "button")
+        self.type_combo.addItem("Menu", "menu")
+        self.type_combo.currentIndexChanged.connect(self._on_type_changed)
+        form.addRow("Type", self.type_combo)
+
+        icon_row = QHBoxLayout()
+        self.icon_path = QLineEdit()
+        self.icon_path.setPlaceholderText("optional icon")
+        browse = QPushButton("Browse…")
+        browse.clicked.connect(self._browse_icon)
+        icon_row.addWidget(self.icon_path, 1)
+        icon_row.addWidget(browse)
+        form.addRow("Icon", icon_row)
+        root.addLayout(form)
+
+        self.command_edit = QTextEdit()
+        self.command_edit.setAcceptRichText(False)
+        self.command_edit.setPlaceholderText(
+            "# Python. Available names include scriptNode, Gaffer, GafferUI."
+        )
+        self.command_edit.setPlainText(command or "")
+        root.addWidget(self.command_edit, 1)
+
+        self.menu_panel = QWidget()
+        menu_layout = QVBoxLayout(self.menu_panel)
+        menu_layout.setContentsMargins(0, 0, 0, 0)
+        menu_layout.setSpacing(6)
+        menu_body = QHBoxLayout()
+        menu_layout.addLayout(menu_body, 1)
+        menu_left = QVBoxLayout()
+        self.menu_list = QListWidget()
+        self.menu_list.currentRowChanged.connect(self._on_menu_row)
+        menu_left.addWidget(self.menu_list, 1)
+        menu_btns = QHBoxLayout()
+        add_item = QPushButton("Add")
+        add_item.clicked.connect(self._add_menu_item)
+        remove_item = QPushButton("Remove")
+        remove_item.clicked.connect(self._remove_menu_item)
+        menu_btns.addWidget(add_item)
+        menu_btns.addWidget(remove_item)
+        menu_left.addLayout(menu_btns)
+        menu_body.addLayout(menu_left, 1)
+        menu_right = QVBoxLayout()
+        self.menu_label = QLineEdit()
+        self.menu_label.setPlaceholderText("Menu item label")
+        self.menu_label.textChanged.connect(self._on_menu_fields)
+        self.menu_command = QTextEdit()
+        self.menu_command.setAcceptRichText(False)
+        self.menu_command.setPlaceholderText("# Python for this menu item")
+        self.menu_command.textChanged.connect(self._on_menu_fields)
+        menu_right.addWidget(self.menu_label)
+        menu_right.addWidget(self.menu_command, 1)
+        menu_body.addLayout(menu_right, 2)
+        root.addWidget(self.menu_panel, 1)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.button(QDialogButtonBox.Ok).setObjectName("PrimaryButton")
+        buttons.button(QDialogButtonBox.Ok).setText("Add")
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        root.addWidget(buttons)
+
+        if command and command.strip():
+            self._menu_items.append({
+                "label": "Run",
+                "command": command,
+            })
+        self._on_type_changed()
+        self.name_edit.setFocus()
+
+    def _browse_icon(self):
+        path = _pick_existing_file(
+            self,
+            "Select Shelf Icon",
+            user_icons_dir(),
+            "Images (*.png *.jpg *.jpeg *.bmp *.gif *.svg);;All Files (*)",
+        )
+        if not path:
+            return
+        stored = _import_icon_to_user(path)
+        if stored:
+            self.icon_path.setText(stored)
+
+    def _on_type_changed(self, *_args):
+        is_menu = self.type_combo.currentData() == "menu"
+        self.command_edit.setVisible(not is_menu)
+        self.menu_panel.setVisible(is_menu)
+        if is_menu and not self._menu_items:
+            self._menu_items.append({
+                "label": "Run",
+                "command": self.command_edit.toPlainText(),
+            })
+        if is_menu:
+            self._rebuild_menu_list(0)
+
+    def _rebuild_menu_list(self, select_row=None):
+        self._suppress = True
+        self.menu_list.clear()
+        for item in self._menu_items:
+            self.menu_list.addItem(QListWidgetItem(item.get("label") or "Item"))
+        self._suppress = False
+        if self._menu_items:
+            row = 0 if select_row is None else select_row
+            row = max(0, min(row, len(self._menu_items) - 1))
+            self.menu_list.setCurrentRow(row)
+        else:
+            self.menu_label.clear()
+            self.menu_command.clear()
+
+    def _on_menu_row(self, row):
+        if self._suppress:
+            return
+        if row < 0 or row >= len(self._menu_items):
+            return
+        item = self._menu_items[row]
+        self._suppress = True
+        self.menu_label.setText(item.get("label") or "")
+        self.menu_command.setPlainText(item.get("command") or "")
+        self._suppress = False
+
+    def _on_menu_fields(self, *_args):
+        if self._suppress:
+            return
+        row = self.menu_list.currentRow()
+        if row < 0 or row >= len(self._menu_items):
+            return
+        label = self.menu_label.text().strip() or "Item"
+        self._menu_items[row]["label"] = label
+        self._menu_items[row]["command"] = self.menu_command.toPlainText()
+        current = self.menu_list.item(row)
+        if current is not None:
+            current.setText(label)
+
+    def _add_menu_item(self):
+        self._menu_items.append({"label": "Item", "command": ""})
+        self._rebuild_menu_list(len(self._menu_items) - 1)
+        self.menu_label.setFocus()
+        self.menu_label.selectAll()
+
+    def _remove_menu_item(self):
+        row = self.menu_list.currentRow()
+        if row < 0 or row >= len(self._menu_items):
+            return
+        del self._menu_items[row]
+        self._rebuild_menu_list(min(row, len(self._menu_items) - 1))
+
+    def action_definition(self, existing_ids):
+        label = self.name_edit.text().strip() or "Tool"
+        action = {
+            "id": _action_id_from_label(label, existing_ids),
+            "label": label,
+            "tooltip": label,
+        }
+        icon = self.icon_path.text().strip()
+        if icon:
+            action["icon"] = icon
+        if self.type_combo.currentData() == "menu":
+            items = []
+            for item in self._menu_items:
+                item_label = (item.get("label") or "Item").strip() or "Item"
+                items.append({
+                    "id": _action_id_from_label(item_label, [i.get("id") for i in items]),
+                    "label": item_label,
+                    "command": item.get("command") or "",
+                })
+            if not items:
+                items.append({
+                    "id": "run",
+                    "label": "Run",
+                    "command": self.command_edit.toPlainText(),
+                })
+            action["menu"] = items
+        else:
+            action["command"] = self.command_edit.toPlainText()
+        return action
+
+
 class _ShelfBar(QWidget):
     """Grip + left tab selector + toolbar for the active shelf."""
 
@@ -2367,8 +2603,12 @@ class _ShelfBar(QWidget):
         self.shelf = QToolBar("Shelf", self)
         self.shelf.setIconSize(QSize(SHELF_ICON_SIZE, SHELF_ICON_SIZE))
         self.shelf.setMovable(False)
+        self.shelf.setToolTip("Drop Python here, or right-click, to add a shelf button")
         root.addWidget(self.shelf, 1)
 
+        self._arm_drop_target(self)
+        self._arm_drop_target(self.grip)
+        self._arm_drop_target(self.shelf)
         self._rebuild_actions()
 
     def _apply_accent(self, color=None):
@@ -2478,6 +2718,65 @@ class _ShelfBar(QWidget):
             QMessageBox.critical(parent, "Delete Failed", str(e))
             return
         self.reload_definitions()
+
+    def _arm_drop_target(self, widget):
+        if widget is None or widget.property("_sdvtkDrop"):
+            return
+        widget.setProperty("_sdvtkDrop", True)
+        widget.setAcceptDrops(True)
+        widget.installEventFilter(self)
+
+    def _arm_shelf_drops(self):
+        self._arm_drop_target(self.shelf)
+        for widget in self.shelf.findChildren(QWidget):
+            self._arm_drop_target(widget)
+
+    def eventFilter(self, obj, event):
+        et = event.type()
+        if et in (QtCore.QEvent.DragEnter, QtCore.QEvent.DragMove):
+            if _code_from_mime(event.mimeData()) is not None:
+                event.acceptProposedAction()
+                return True
+            return False
+        if et == QtCore.QEvent.Drop:
+            code = _code_from_mime(event.mimeData())
+            if code is None:
+                return False
+            self.add_action_from_code(code)
+            event.acceptProposedAction()
+            return True
+        if et == QtCore.QEvent.ContextMenu:
+            self._show_add_menu(event.globalPos())
+            return True
+        return super(_ShelfBar, self).eventFilter(obj, event)
+
+    def _show_add_menu(self, global_pos):
+        menu = QMenu(self)
+        add_act = menu.addAction("Add Action/Menu to shelf")
+        chosen = _menu_exec_at(menu, global_pos)
+        if chosen is add_act:
+            self.add_action_from_code("")
+
+    def add_action_from_code(self, code):
+        parent = self.window() or self
+        dialog = _AddActionDialog(parent, command=code or "")
+        if _dialog_exec(dialog) != QDialog.Accepted:
+            return
+        shelf_name = self.__current or "sdvTk"
+        try:
+            data = load_user_shelf_data(shelf_name)
+        except Exception as error:
+            QMessageBox.critical(parent, "Add Failed", str(error))
+            return
+        existing = [a.get("id") for a in (data.get("actions") or [])]
+        action = dialog.action_definition(existing)
+        data.setdefault("actions", []).append(action)
+        try:
+            save_user_shelf_data(shelf_name, data)
+        except Exception as error:
+            QMessageBox.critical(parent, "Add Failed", str(error))
+            return
+        self.reload_definitions(select_name=shelf_name)
 
     def _rebuild_actions(self):
         self.shelf.clear()
@@ -2605,6 +2904,8 @@ class _ShelfBar(QWidget):
 
             self.shelf.addWidget(btn)
 
+        self._arm_shelf_drops()
+
 
 class _ShelfHost(QWidget):
     """Keeps a slot under the menu bar; collapses while the shelf floats."""
@@ -2650,6 +2951,24 @@ class _ShelfHost(QWidget):
         self.__layout.addWidget(self.bar)
         self.bar.show()
         self.setVisible(True)
+
+    def is_shown(self):
+        if self.__floating:
+            return self.bar.isVisible()
+        return self.isVisible()
+
+    def show_shelf(self):
+        if self.__floating:
+            self.bar.show()
+            self.bar.raise_()
+            return
+        self.bar.show()
+        self.setVisible(True)
+
+    def hide_shelf(self):
+        if self.__floating:
+            self.bar.hide()
+        self.setVisible(False)
 
     def shutdown(self):
         if self.__floating:
@@ -2734,6 +3053,27 @@ def _on_window_created(scriptWindow, _tries=None):
 def _script_windows():
     """Live script windows. ``ScriptWindow`` has no public ``instances()``."""
     return [o for o in gc.get_objects() if isinstance(o, GafferUI.ScriptWindow)]
+
+
+def shelf_host(scriptWindow):
+    return getattr(scriptWindow, "_sdvtk_shelf_host", None)
+
+
+def shelf_is_shown(scriptWindow):
+    host = shelf_host(scriptWindow)
+    return host is not None and host.is_shown()
+
+
+def show_shelf(scriptWindow):
+    host = shelf_host(scriptWindow)
+    if host is not None:
+        host.show_shelf()
+
+
+def hide_shelf(scriptWindow):
+    host = shelf_host(scriptWindow)
+    if host is not None:
+        host.hide_shelf()
 
 
 def install(application=None):
