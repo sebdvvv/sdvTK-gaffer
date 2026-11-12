@@ -47,6 +47,10 @@ Settings come from the first frame in the file. If an output's expanded file nam
 | `render:depthOfField` | `disableDepthOfField` |
 | `sampleMotion`, transform blur, deformation blur | `disableMotionBlur` |
 | `render:includedPurposes` | `includedPurposes` |
+| `ai:background` (Arnold) | That shader network on `/mtl/background/nodeGraph`, linked from `arnold:global:background`. Wins over `render:backgroundColor` |
+| `render:backgroundColor` (Arnold) | `arnold:flat` on that same graph when `ai:background` is not set |
+| `ri:displayfilter` (RenderMan) | That shader network on `/mtl/displayfilter/nodeGraph`, linked from `ri:displayfilter` |
+| `cycles:background:shader` (Cycles) | That shader network on `/mtl/cyclesBackground/nodeGraph`, linked from `cycles:background:shader` |
 | selected engine's options (`ai:` → `arnold:`, `ri:`, `cycles:`) | attributes on the settings prim |
 
 Film fit:

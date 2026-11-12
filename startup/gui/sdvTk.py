@@ -43,6 +43,7 @@ for _path, _cls, _search in (
 
 from sdvTkGafferUI import arnoldViewer  # noqa: E402
 from sdvTkGafferUI import hierarchyBrowse  # noqa: E402
+from sdvTkGafferUI import hierarchySelect  # noqa: E402
 from sdvTkGafferUI import menu as sdv_menu  # noqa: E402
 from sdvTkGafferUI import scriptEditor  # noqa: E402
 from sdvTkGafferUI import shaderBinding  # noqa: E402
@@ -53,6 +54,7 @@ from sdvTkGafferUI import viewerSync  # noqa: E402
 arnoldViewer.install(application)
 viewerSync.install(application)
 hierarchyBrowse.install(application)
+hierarchySelect.install(application)
 shaderBinding.install(application)
 uiTweaks.install(application)
 sdv_shelf.install(application)

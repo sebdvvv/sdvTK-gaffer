@@ -11,6 +11,12 @@ import Gaffer
 import GafferScene
 import IECore
 
+from ._background import (
+    add_background_plugs,
+    ensure_background_rigs,
+    internal_background,
+    sync_background,
+)
 from ._box import (
     ENABLED_SWITCH,
     BoxNetworkSerialiser,
@@ -84,6 +90,7 @@ class sdvRenderSettings(SceneInsertMixin, Gaffer.Box):
             Gaffer.Metadata.registerValue(plug, "description", text)
 
         self.__add_standard_options()
+        add_background_plugs(self)
 
         last = self._wire_options_chain()
         for item in ENGINE_ORDER:
@@ -96,6 +103,8 @@ class sdvRenderSettings(SceneInsertMixin, Gaffer.Box):
             if "enabled" in options:
                 options["enabled"].setValue(item == engine)
 
+        ensure_background_rigs(self)
+        last = self._wire_options_chain()
         switch = add_enabled_switch(self, last)
         Gaffer.PlugAlgo.promote(switch["out"])
 
@@ -158,6 +167,11 @@ class sdvRenderSettings(SceneInsertMixin, Gaffer.Box):
                 continue
             _set_input(options["in"], last)
             last = options["out"]
+            background = self.getChild(internal_background(item))
+            if background is None or "in" not in background or "out" not in background:
+                continue
+            _set_input(background["in"], last)
+            last = background["out"]
         return last
 
     def _sync_standard_renderer(self) -> None:
@@ -180,6 +194,9 @@ class sdvRenderSettings(SceneInsertMixin, Gaffer.Box):
             options = self.getChild(internal_options(engine))
             if options is not None:
                 last = options["out"]
+            background = self.getChild(internal_background(engine))
+            if background is not None and "out" in background:
+                last = background["out"]
         return last
 
     def _chain_tail(self):
@@ -196,6 +213,7 @@ class sdvRenderSettings(SceneInsertMixin, Gaffer.Box):
             if options is None or "enabled" not in options:
                 continue
             set_plug_value(options["enabled"], item == engine)
+        sync_background(self, engine)
         enabled = self.getChild(ENABLED_SWITCH)
         if enabled is not None:
             enabled["in"][1].setInput(self._chain_tail())
@@ -289,8 +307,7 @@ class sdvRenderSettings(SceneInsertMixin, Gaffer.Box):
         self._wire_options_chain()
 
     def _on_script_loaded(self, *_args) -> None:
-        self._wire_options_chain()
-        self._sync_standard_renderer()
+        self._sync_driven_plugs()
 
     def _on_plug_set(self, plug: Gaffer.Plug) -> None:
         if getattr(self, "_sdvRenderSettings__slotsReady", False):
@@ -324,7 +341,9 @@ Gaffer.Metadata.registerNode(
     "Enable Subdivision and Enable Displacement drive the matching "
     "toggles in the Viewer Arnold settings menu, and revert when this "
     "node is deleted. Renderer drives Standard Options Default Renderer. "
-    "Attribute sets live on sdvRenderAttributes. "
+    "Background authors a flat colour for the active renderer: an Arnold "
+    "flat shader, a RenderMan PxrBackgroundDisplayFilter, or a Cycles "
+    "background shader. Attribute sets live on sdvRenderAttributes. "
     "Unused engine nodes are disabled. Existing scenes keep the saved engine.",
 )
 

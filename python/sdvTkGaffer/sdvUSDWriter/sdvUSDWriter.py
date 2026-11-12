@@ -12,7 +12,7 @@ import GafferScene
 import GafferUSD
 import IECore
 
-from ._translate import (
+from ._translator import (
     author_render_settings,
     members_from_globals,
     package_usdz,
@@ -164,9 +164,9 @@ class sdvUSDWriter(GafferDispatch.TaskNode):
             node = GafferScene.MergeScenes(name)
             self.addChild(node)
             Gaffer.Metadata.registerValue(node, "nodeGadget:visible", False)
-            if name == "mS2":
-                # Keep would leave the blank scene's globals. Merge lets the input win.
-                node["globalsMode"].setValue(GafferScene.MergeScenes.Mode.Merge)
+        # Keep would keep the blank scene, which is connected first. Merge lets the input win.
+        node["attributesMode"].setValue(GafferScene.MergeScenes.Mode.Merge)
+        node["globalsMode"].setValue(GafferScene.MergeScenes.Mode.Merge)
         return node
 
     def _wire_writer(self):
@@ -325,8 +325,12 @@ Gaffer.Metadata.registerNode(
 
     Renderer options for the selected engine are copied onto the settings
     prim. Arnold's `ai:` options are written as `arnold:`. RenderMan stays
-    `ri:` and Cycles stays `cycles:`. `render:inclusions` is copied as a
-    string and does not prune the scene.
+    `ri:` and Cycles stays `cycles:`. An Arnold Background shader is written
+    as the background node graph. When that shader is absent, an enabled
+    `render:backgroundColor` becomes an Arnold flat shader on the same graph.
+    The Arnold Background wins when both are set. A RenderMan display filter
+    and a Cycles background shader are written as their own node graphs.
+    `render:inclusions` is copied as a string and does not prune the scene.
     """,
     plugs={
         "renderer": {

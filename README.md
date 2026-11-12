@@ -59,6 +59,7 @@ Closing a script that still has unsaved changes asks **Cancel | Discard | Save**
 - **Ctrl + Double-click opens Node editor panels** — Ctrl+double-click opens a Node Editor for the node.
 - **Graph View right-click menu has navigation** — the graph menu includes back (◀) and root (/).
 - **Scene Hierarchy: browse without retriggering the Viewer** — expand and collapse in the Hierarchy View while the Viewer keeps its Visible Set.
+- **Scene Hierarchy: Select Node** — right-click a primitive and choose **Select Node** to select the node that created it. The Graph Editor stays where it is.
 - **Replace the Python Editor with [pw_MultiScriptEditor](https://github.com/sebdvvv/pw_MultiScriptEditor)** — set the folder that contains `multi_script_editor`. The next launch adds it to `PYTHONPATH` and docks that editor under the Graph Editor.
 
 ---

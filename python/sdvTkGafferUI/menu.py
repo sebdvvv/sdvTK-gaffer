@@ -208,6 +208,7 @@ def _feature_html() -> str:
   <li>Arnold Viewer Shading / Lighting / Textures: Full as default</li>
   <li>Unsaved-changes dialog: Cancel | Discard | Save (Discard is the middle button)</li>
   <li>Optional: Hierarchy View browse without retriggering the Viewer</li>
+  <li>Hierarchy View: Select Node for the selected primitive</li>
   <li>Hierarchy View: Select Shaders assigned to primitive</li>
 </ul>
 <p style="margin:10px 0 4px 0;"><b>Graph &amp; editors</b></p>

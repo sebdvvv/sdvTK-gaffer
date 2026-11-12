@@ -220,6 +220,21 @@ class _sdvRenderSettingsWidget(CardNodeWidget):
                 pass
             toggles.append(widget)
         card.append(toggles)
+        background = GafferUI.ListContainer(
+            GafferUI.ListContainer.Orientation.Horizontal, spacing=8
+        )
+        background_label = GafferUI.Label("Background")
+        try:
+            background_label._qtWidget().setFixedWidth(self._LABEL_W)
+        except Exception:
+            pass
+        background.append(background_label)
+        background.append(GafferUI.BoolPlugValueWidget(self._node["background"]))
+        color = GafferUI.PlugValueWidget.create(self._node["backgroundColor"])
+        if color is not None:
+            expand_h(color)
+            background.append(color, expand=True)
+        card.append(background)
         try:
             from sdvTkGafferUI.viewerSync import sync_node
 

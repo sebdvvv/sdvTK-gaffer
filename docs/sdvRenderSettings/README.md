@@ -11,6 +11,8 @@ Renderer options. Tweak them globally on the renderer instead of wiring a stack 
 
 **Enable Subdivision** and **Enable Displacement** sit under **Renderer** and drive the matching viewport Arnold toggles.
 
+**Background** and **Background Color** sit under those toggles. Turn Background on to author that colour for the active renderer. Arnold gets a `flat` shader on Arnold Background, RenderMan a `PxrBackgroundDisplayFilter` on a Display Filter, and Cycles a background shader on Cycles Background. Switching renderer enables only that engine's nodes.
+
 ### Presets
 
 On the Options tab: **Preset**, **Save**, **Load**. YAML is read from:

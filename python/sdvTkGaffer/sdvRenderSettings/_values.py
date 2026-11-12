@@ -51,6 +51,10 @@ def reset_values(node: Gaffer.Node) -> None:
             attr = node.getChild(internal_attributes(engine, index))
             if attr is not None and "attributes" in attr:
                 _reset_plug(attr["attributes"])
+    for name in ("background", "backgroundColor"):
+        plug = node.getChild(name)
+        if plug is not None:
+            _reset_plug(plug)
 
 
 def _collect_standard(node: Gaffer.Node) -> dict:
