@@ -1,7 +1,7 @@
 
 # sdvTK-gaffer
 
-This is an open-source contribution to [Gaffer](https://github.com/GafferHQ/gaffer), for anyone who wants a quick, production-shaped  lighting/shading workflow It is designed around production-standard requirements, including a single node that provides every element needed for natural sky lighting.
+This is an open-source contribution to [Gaffer](https://github.com/GafferHQ/gaffer), for anyone who wants a quick, production-shaped  lighting/shading workflow It is designed around production-standard requirements, including a single nodes that provides every element needed for natural sky lighting, general lighting, Render Attributes setup, RenderSettings and USD Writing.
 
 One toolkit for lighting, shading, and render settings.
 
