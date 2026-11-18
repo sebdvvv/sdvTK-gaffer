@@ -42,11 +42,12 @@ set PYTHONPATH=C:\path\to\sdvTK-gaffer\python;%PYTHONPATH%
 set GAFFER_STARTUP_PATHS=C:\path\to\sdvTK-gaffer\startup;%GAFFER_STARTUP_PATHS%
 ```
 
-Arnold Viewer settings set at startup to Shading, Lighting, and Textures to **Full**.
-
 ---
 
 ## Gaffer UI & interaction Mods
+
+
+Arnold Viewer settings set at startup to Shading, Lighting, and Textures to **Full**.
 
 Middle-click a layout tab to close it (Graph Editor, Viewer, and the other editors).
 
